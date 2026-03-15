@@ -17,8 +17,8 @@ import 'screens/cart/checkout_screen.dart';
 import 'screens/orders/orders_screen.dart';
 import 'screens/orders/order_detail_screen.dart';
 import 'screens/orders/order_confirm_screen.dart';
+import 'screens/orders/coins_screen.dart';
 import 'screens/support/support_screens.dart';
-
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
@@ -42,6 +42,7 @@ class PizzaHapApp extends StatelessWidget {
       ChangeNotifierProvider(create: (_) => CartProvider()),
       ChangeNotifierProvider(create: (_) => MenuProvider()),
       ChangeNotifierProvider(create: (_) => OrderProvider()),
+      ChangeNotifierProvider(create: (_) => CoinsProvider()),
       ChangeNotifierProvider(create: (_) => NotificationProvider()),
     ],
     child: MaterialApp(
@@ -62,9 +63,7 @@ class PizzaHapApp extends StatelessWidget {
       case '/branch-selection': return _slide(const BranchSelectionScreen());
 
       case '/home':        return _fade(const MainShell());
-      // /cart goes to MainShell with cart tab active (tab index 2)
       case '/cart':
-        // If coming from coupons with autoCoupon, push standalone CartScreen
         final cartArgs = settings.arguments;
         if (cartArgs is Map && cartArgs['autoCoupon'] != null) {
           return _slide(CartScreen(autoCoupon: cartArgs['autoCoupon'] as String));
@@ -82,10 +81,12 @@ class PizzaHapApp extends StatelessWidget {
           orderId: args['order_id'],
           orderNumber: args['order_number'],
           total: (args['total'] ?? 0).toDouble(),
+          coinsRedeemed: args['coins_redeemed'] ?? 0,
         ));
       case '/orders':      return _slide(const OrdersScreen());
       case '/order-detail':
         return _slide(OrderDetailScreen(orderId: settings.arguments as int));
+      case '/coins':       return _slide(const CoinsScreen());
       case '/support':     return _slide(const SupportScreen());
       case '/notifications': return _slide(const NotificationsScreen());
       case '/ticket-detail':

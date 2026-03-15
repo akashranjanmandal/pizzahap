@@ -5,9 +5,11 @@ class OrderConfirmScreen extends StatelessWidget {
   final int orderId;
   final String orderNumber;
   final double total;
+  final int coinsRedeemed;
 
   const OrderConfirmScreen({
-    super.key, required this.orderId, required this.orderNumber, required this.total,
+    super.key, required this.orderId, required this.orderNumber,
+    required this.total, this.coinsRedeemed = 0,
   });
 
   @override
@@ -20,7 +22,6 @@ class OrderConfirmScreen extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // Success animation placeholder
               Container(
                 width: 120, height: 120,
                 decoration: BoxDecoration(
@@ -39,27 +40,45 @@ class OrderConfirmScreen extends StatelessWidget {
               ),
               const SizedBox(height: 28),
 
-              // Order info card
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
+                  color: Colors.white, borderRadius: BorderRadius.circular(16),
                   boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 12)],
                 ),
-                child: Column(
-                  children: [
-                    _infoRow('Order Number', orderNumber),
+                child: Column(children: [
+                  _infoRow('Order Number', orderNumber),
+                  const Divider(height: 20),
+                  _infoRow('Amount Paid', '₹${total.toStringAsFixed(0)}'),
+                  if (coinsRedeemed > 0) ...[
                     const Divider(height: 20),
-                    _infoRow('Amount Paid', '₹${total.toStringAsFixed(0)}'),
-                    const Divider(height: 20),
-                    _infoRow('Estimated Time', '30-45 mins'),
+                    _infoRow('🪙 Coins Used', '$coinsRedeemed coins (₹$coinsRedeemed off)'),
                   ],
-                ),
+                  const Divider(height: 20),
+                  _infoRow('Estimated Time', '30–45 mins'),
+                ]),
               ),
-              const SizedBox(height: 32),
 
+              // Coins earning hint
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                decoration: BoxDecoration(
+                  color: const Color(AppColors.coins).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  const Text('🪙', style: TextStyle(fontSize: 16)),
+                  const SizedBox(width: 8),
+                  Text(
+                    'You\'ll earn ${(total / 10).floor()} coins after delivery!',
+                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Color(AppColors.coins)),
+                  ),
+                ]),
+              ),
+
+              const SizedBox(height: 32),
               ElevatedButton(
                 onPressed: () => Navigator.pushNamedAndRemoveUntil(
                   context, '/order-detail', (r) => r.settings.name == '/home',

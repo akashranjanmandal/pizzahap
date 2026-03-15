@@ -138,11 +138,33 @@ class _OrderCard extends StatelessWidget {
                     const SizedBox(width: 4),
                     Text(order.deliveryType == 'delivery' ? 'Delivery' : 'Pickup',
                       style: TextStyle(fontSize: 13, color: Colors.grey.shade600)),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: order.isPaid
+                          ? const Color(AppColors.success).withOpacity(0.1)
+                          : const Color(AppColors.warning).withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        order.isCOD ? (order.isPaid ? 'COD ✓' : 'COD') : (order.isPaid ? 'Paid' : 'Pending'),
+                        style: TextStyle(
+                          fontSize: 10, fontWeight: FontWeight.w700,
+                          color: order.isPaid ? const Color(AppColors.success) : const Color(AppColors.warning),
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),
-              Text('₹${order.totalAmount}',
-                style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: Color(AppColors.primary))),
+              Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                Text('₹${order.totalAmount.toStringAsFixed(0)}',
+                  style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: Color(AppColors.primary))),
+                if (order.coinsEarned > 0)
+                  Text('+${order.coinsEarned}🪙',
+                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(AppColors.coins))),
+              ]),
             ],
           ),
           if (order.canCancel) ...[

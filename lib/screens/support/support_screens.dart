@@ -119,15 +119,14 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   String _notifEmoji(String? type) {
     switch (type) {
-      case 'order':
-        return '📦';
-      case 'payment':
-        return '💳';
-      case 'promo':
-        return '🎫';
-      default:
-        return '🔔';
+      case 'order':   return '📦';
+      case 'payment': return '💳';
+      case 'promo':   return '🎫';
+      case 'refund':  return '↩️';
+      case 'coins':   return '🪙';
+      default:        return '🔔';
     }
+  }
   }
 }
 

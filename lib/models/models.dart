@@ -7,24 +7,24 @@ class User {
   final String? mobile;
   final String? profilePicture;
   final String? address;
+  final String? addressHouse;
+  final String? addressTown;
+  final String? addressState;
+  final String? addressPincode;
   final double? latitude;
   final double? longitude;
   final int? preferredLocationId;
   final String? preferredLocationName;
   final String? createdAt;
+  final int coinBalance;
 
   User({
-    required this.id,
-    required this.name,
-    required this.email,
-    this.mobile,
-    this.profilePicture,
-    this.address,
-    this.latitude,
-    this.longitude,
-    this.preferredLocationId,
-    this.preferredLocationName,
-    this.createdAt,
+    required this.id, required this.name, required this.email,
+    this.mobile, this.profilePicture,
+    this.address, this.addressHouse, this.addressTown, this.addressState, this.addressPincode,
+    this.latitude, this.longitude,
+    this.preferredLocationId, this.preferredLocationName, this.createdAt,
+    this.coinBalance = 0,
   });
 
   factory User.fromJson(Map<String, dynamic> json) => User(
@@ -34,26 +34,42 @@ class User {
     mobile: json['mobile'],
     profilePicture: json['profile_picture'],
     address: json['address'],
+    addressHouse: json['address_house'],
+    addressTown: json['address_town'],
+    addressState: json['address_state'],
+    addressPincode: json['address_pincode'],
     latitude: _parseDoubleOrNull(json['latitude']),
     longitude: _parseDoubleOrNull(json['longitude']),
     preferredLocationId: json['preferred_location_id'],
     preferredLocationName: json['preferred_location_name'],
     createdAt: json['created_at'],
+    coinBalance: json['coin_balance'] != null ? (json['coin_balance'] as num).toInt() : 0,
   );
 
-  Map<String, dynamic> toJson() => {
-    'id': id, 'name': name, 'email': email,
-    'mobile': mobile, 'profile_picture': profilePicture,
-    'address': address,
-  };
+  String get fullAddress {
+    final parts = [addressHouse, addressTown, addressState, addressPincode]
+        .where((p) => p != null && p.isNotEmpty).toList();
+    if (parts.isNotEmpty) return parts.join(', ');
+    return address ?? '';
+  }
 
-  User copyWith({String? name, String? mobile, String? address, int? preferredLocationId}) => User(
+  User copyWith({
+    String? name, String? mobile,
+    String? address, String? addressHouse, String? addressTown,
+    String? addressState, String? addressPincode,
+    int? preferredLocationId, int? coinBalance,
+  }) => User(
     id: id, name: name ?? this.name, email: email,
-    mobile: mobile ?? this.mobile,
-    profilePicture: profilePicture, address: address ?? this.address,
+    mobile: mobile ?? this.mobile, profilePicture: profilePicture,
+    address: address ?? this.address,
+    addressHouse: addressHouse ?? this.addressHouse,
+    addressTown: addressTown ?? this.addressTown,
+    addressState: addressState ?? this.addressState,
+    addressPincode: addressPincode ?? this.addressPincode,
     latitude: latitude, longitude: longitude,
     preferredLocationId: preferredLocationId ?? this.preferredLocationId,
     preferredLocationName: preferredLocationName, createdAt: createdAt,
+    coinBalance: coinBalance ?? this.coinBalance,
   );
 }
 
@@ -240,9 +256,7 @@ class CartItem {
   double get unitPrice {
     double price = size.price;
     if (crust != null) price += crust!.extraPrice;
-    for (final t in selectedToppings) {
-      price += t.price;
-    }
+    for (final t in selectedToppings) price += t.price;
     return price;
   }
 
@@ -269,10 +283,13 @@ class OrderCalculation {
   final double deliveryFee;
   final double taxAmount;
   final double totalAmount;
+  final double coinsDiscount;
+  final int availableCoins;
 
   OrderCalculation({
     required this.subtotal, required this.discountAmount,
     required this.deliveryFee, required this.taxAmount, required this.totalAmount,
+    this.coinsDiscount = 0, this.availableCoins = 0,
   });
 
   factory OrderCalculation.fromJson(Map<String, dynamic> json) => OrderCalculation(
@@ -281,6 +298,8 @@ class OrderCalculation {
     deliveryFee: _parseDouble(json['delivery_fee']),
     taxAmount: _parseDouble(json['tax_amount']),
     totalAmount: _parseDouble(json['total_amount']),
+    coinsDiscount: _parseDouble(json['coins_discount']),
+    availableCoins: json['available_coins'] != null ? (json['available_coins'] as num).toInt() : 0,
   );
 }
 
@@ -328,11 +347,35 @@ class OrderStatusHistory {
   );
 }
 
+class OrderFeedback {
+  final int id;
+  final int foodRating;
+  final int? deliveryRating;
+  final int overallRating;
+  final String? comment;
+  final String createdAt;
+
+  OrderFeedback({
+    required this.id, required this.foodRating, this.deliveryRating,
+    required this.overallRating, this.comment, required this.createdAt,
+  });
+
+  factory OrderFeedback.fromJson(Map<String, dynamic> json) => OrderFeedback(
+    id: json['id'] ?? 0,
+    foodRating: json['food_rating'] ?? 0,
+    deliveryRating: json['delivery_rating'],
+    overallRating: json['overall_rating'] ?? 0,
+    comment: json['comment'],
+    createdAt: json['created_at'] ?? '',
+  );
+}
+
 class Order {
   final int id;
   final String orderNumber;
   final String status;
   final String paymentStatus;
+  final String paymentMethod;
   final String deliveryType;
   final String? deliveryAddress;
   final double subtotal;
@@ -340,19 +383,24 @@ class Order {
   final double deliveryFee;
   final double taxAmount;
   final double totalAmount;
+  final int coinsRedeemed;
+  final int coinsEarned;
   final String? locationName;
   final String? specialInstructions;
   final String createdAt;
   final List<OrderItem> items;
   final List<OrderStatusHistory> statusHistory;
+  final OrderFeedback? feedback;
 
   Order({
     required this.id, required this.orderNumber, required this.status,
-    required this.paymentStatus, required this.deliveryType, this.deliveryAddress,
+    required this.paymentStatus, this.paymentMethod = 'online',
+    required this.deliveryType, this.deliveryAddress,
     required this.subtotal, required this.discountAmount, required this.deliveryFee,
-    required this.taxAmount, required this.totalAmount, this.locationName,
-    this.specialInstructions, required this.createdAt,
-    this.items = const [], this.statusHistory = const [],
+    required this.taxAmount, required this.totalAmount,
+    this.coinsRedeemed = 0, this.coinsEarned = 0,
+    this.locationName, this.specialInstructions, required this.createdAt,
+    this.items = const [], this.statusHistory = const [], this.feedback,
   });
 
   factory Order.fromJson(Map<String, dynamic> json) => Order(
@@ -360,6 +408,7 @@ class Order {
     orderNumber: json['order_number'] ?? '',
     status: json['status'] ?? '',
     paymentStatus: json['payment_status'] ?? '',
+    paymentMethod: json['payment_method'] ?? 'online',
     deliveryType: json['delivery_type'] ?? 'delivery',
     deliveryAddress: json['delivery_address'],
     subtotal: _parseDouble(json['subtotal']),
@@ -367,14 +416,58 @@ class Order {
     deliveryFee: _parseDouble(json['delivery_fee']),
     taxAmount: _parseDouble(json['tax_amount']),
     totalAmount: _parseDouble(json['total_amount']),
+    coinsRedeemed: json['coins_redeemed'] != null ? (json['coins_redeemed'] as num).toInt() : 0,
+    coinsEarned: json['coins_earned'] != null ? (json['coins_earned'] as num).toInt() : 0,
     locationName: json['location_name'],
     specialInstructions: json['special_instructions'],
     createdAt: json['created_at'] ?? '',
     items: (json['items'] as List<dynamic>?)?.map((i) => OrderItem.fromJson(i)).toList() ?? [],
     statusHistory: (json['status_history'] as List<dynamic>?)?.map((s) => OrderStatusHistory.fromJson(s)).toList() ?? [],
+    feedback: json['feedback'] != null ? OrderFeedback.fromJson(json['feedback']) : null,
   );
 
   bool get canCancel => status == 'pending' || status == 'confirmed';
+  bool get isDelivered => status == 'delivered';
+  bool get isCOD => paymentMethod == 'cash_on_delivery';
+  bool get isPaid => paymentStatus == 'paid';
+}
+
+// ─── COINS MODELS ─────────────────────────────────────────────────
+
+class CoinTransaction {
+  final int id;
+  final String type; // earned | redeemed | reverted
+  final int coins;
+  final String? description;
+  final String? orderNumber;
+  final String createdAt;
+
+  CoinTransaction({
+    required this.id, required this.type, required this.coins,
+    this.description, this.orderNumber, required this.createdAt,
+  });
+
+  factory CoinTransaction.fromJson(Map<String, dynamic> json) => CoinTransaction(
+    id: json['id'] ?? 0,
+    type: json['type'] ?? '',
+    coins: json['coins'] != null ? (json['coins'] as num).toInt() : 0,
+    description: json['description'],
+    orderNumber: json['order_number'],
+    createdAt: json['created_at'] ?? '',
+  );
+}
+
+class CoinWallet {
+  final int balance;
+  final List<CoinTransaction> transactions;
+
+  CoinWallet({required this.balance, this.transactions = const []});
+
+  factory CoinWallet.fromJson(Map<String, dynamic> json) => CoinWallet(
+    balance: json['balance'] != null ? (json['balance'] as num).toInt() : 0,
+    transactions: (json['transactions'] as List<dynamic>?)
+        ?.map((t) => CoinTransaction.fromJson(t)).toList() ?? [],
+  );
 }
 
 // ─── COUPON MODEL ─────────────────────────────────────────────────
@@ -390,7 +483,8 @@ class Coupon {
 
   Coupon({
     required this.code, this.description, required this.discountType,
-    required this.discountValue, required this.minOrderValue, this.validUntil, this.calculatedDiscount,
+    required this.discountValue, required this.minOrderValue,
+    this.validUntil, this.calculatedDiscount,
   });
 
   factory Coupon.fromJson(Map<String, dynamic> json) => Coupon(
@@ -400,7 +494,8 @@ class Coupon {
     discountValue: _parseDouble(json['discount_value']),
     minOrderValue: _parseDouble(json['min_order_value']),
     validUntil: json['valid_until'],
-    calculatedDiscount: json['calculated_discount'] != null ? _parseDouble(json['calculated_discount']) : null,
+    calculatedDiscount: json['calculated_discount'] != null
+        ? _parseDouble(json['calculated_discount']) : null,
   );
 
   String get displayDiscount => discountType == 'percentage'
@@ -459,7 +554,8 @@ class SupportTicket {
     status: json['status'] ?? '',
     orderNumber: json['order_number'],
     createdAt: json['created_at'] ?? '',
-    messages: (json['messages'] as List<dynamic>?)?.map((m) => SupportMessage.fromJson(m)).toList() ?? [],
+    messages: (json['messages'] as List<dynamic>?)
+        ?.map((m) => SupportMessage.fromJson(m)).toList() ?? [],
   );
 }
 
@@ -484,16 +580,7 @@ class SupportMessage {
   );
 }
 
-// ─── API RESPONSE ─────────────────────────────────────────────────
-
-class ApiResponse<T> {
-  final bool success;
-  final String message;
-  final T? data;
-  final Map<String, dynamic>? pagination;
-
-  ApiResponse({required this.success, required this.message, this.data, this.pagination});
-}
+// ─── HELPERS ──────────────────────────────────────────────────────
 
 class Pagination {
   final int total;
@@ -511,28 +598,18 @@ class Pagination {
   );
 }
 
-// ─── HELPER FUNCTIONS ─────────────────────────────────────────────
-
-// Helper function to safely parse double from various types
 double _parseDouble(dynamic value) {
   if (value == null) return 0.0;
   if (value is double) return value;
   if (value is int) return value.toDouble();
-  if (value is String) {
-    // Try to parse the string to double
-    return double.tryParse(value) ?? 0.0;
-  }
+  if (value is String) return double.tryParse(value) ?? 0.0;
   return 0.0;
 }
 
-// Helper function to safely parse nullable double from various types
 double? _parseDoubleOrNull(dynamic value) {
   if (value == null) return null;
   if (value is double) return value;
   if (value is int) return value.toDouble();
-  if (value is String) {
-    // Try to parse the string to double
-    return double.tryParse(value);
-  }
+  if (value is String) return double.tryParse(value);
   return null;
 }

@@ -6,11 +6,11 @@ class AppConfig {
 }
 
 class AppColors {
-  static const primary = 0xFFCC1F1F;       // Deep pizza red
+  static const primary = 0xFFCC1F1F;
   static const primaryDark = 0xFF991515;
   static const primaryLight = 0xFFE84040;
-  static const accent = 0xFFFF6B35;         // Warm orange
-  static const background = 0xFFFAF7F4;    // Warm cream
+  static const accent = 0xFFFF6B35;
+  static const background = 0xFFFAF7F4;
   static const surface = 0xFFFFFFFF;
   static const card = 0xFFFFFFFF;
   static const textPrimary = 0xFF1A1A1A;
@@ -22,6 +22,7 @@ class AppColors {
   static const error = 0xFFE74C3C;
   static const vegGreen = 0xFF27AE60;
   static const nonVegRed = 0xFFCC1F1F;
+  static const coins = 0xFFFFB300; // amber for coins
 }
 
 class AppStrings {
@@ -45,6 +46,7 @@ class AppStrings {
 
   static const calculateOrder = '/orders/calculate';
   static const orders = '/orders';
+  static const coins = '/orders/coins';
 
   static const coupons = '/coupons';
   static const validateCoupon = '/coupons/validate';

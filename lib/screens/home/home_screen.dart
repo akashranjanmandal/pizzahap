@@ -124,6 +124,25 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                         ),
                         const SizedBox(width: 12),
+                        // Coins chip
+                        if ((auth.user?.coinBalance ?? 0) > 0)
+                          GestureDetector(
+                            onTap: () => Navigator.pushNamed(context, '/coins'),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: const Color(AppColors.coins).withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                                const Text('🪙', style: TextStyle(fontSize: 14)),
+                                const SizedBox(width: 4),
+                                Text('${auth.user!.coinBalance}',
+                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 13)),
+                              ]),
+                            ),
+                          ),
+                        const SizedBox(width: 8),
                         // Cart icon
                         GestureDetector(
                           onTap: () => Navigator.pushNamed(context, '/cart'),

@@ -12,25 +12,34 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   bool _editing = false;
-  final _nameCtrl = TextEditingController();
-  final _mobileCtrl = TextEditingController();
-  final _addressCtrl = TextEditingController();
-
+  final _nameCtrl    = TextEditingController();
+  final _mobileCtrl  = TextEditingController();
+  final _houseCtrl   = TextEditingController();
+  final _townCtrl    = TextEditingController();
+  final _stateCtrl   = TextEditingController();
+  final _pincodeCtrl = TextEditingController();
 
   @override
   void initState() {
     super.initState();
+    _populate();
+  }
+
+  void _populate() {
     final user = context.read<AuthProvider>().user;
-    _nameCtrl.text = user?.name ?? '';
-    _mobileCtrl.text = user?.mobile ?? '';
-    _addressCtrl.text = user?.address ?? '';
+    _nameCtrl.text    = user?.name ?? '';
+    _mobileCtrl.text  = user?.mobile ?? '';
+    _houseCtrl.text   = user?.addressHouse ?? '';
+    _townCtrl.text    = user?.addressTown ?? '';
+    _stateCtrl.text   = user?.addressState ?? '';
+    _pincodeCtrl.text = user?.addressPincode ?? '';
   }
 
   @override
   void dispose() {
-    _nameCtrl.dispose();
-    _mobileCtrl.dispose();
-    _addressCtrl.dispose();
+    _nameCtrl.dispose(); _mobileCtrl.dispose();
+    _houseCtrl.dispose(); _townCtrl.dispose();
+    _stateCtrl.dispose(); _pincodeCtrl.dispose();
     super.dispose();
   }
 
@@ -39,7 +48,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final ok = await auth.updateProfile({
       'name': _nameCtrl.text.trim(),
       if (_mobileCtrl.text.trim().isNotEmpty) 'mobile': _mobileCtrl.text.trim(),
-      if (_addressCtrl.text.trim().isNotEmpty) 'address': _addressCtrl.text.trim(),
+      if (_houseCtrl.text.trim().isNotEmpty)   'address_house':   _houseCtrl.text.trim(),
+      if (_townCtrl.text.trim().isNotEmpty)    'address_town':    _townCtrl.text.trim(),
+      if (_stateCtrl.text.trim().isNotEmpty)   'address_state':   _stateCtrl.text.trim(),
+      if (_pincodeCtrl.text.trim().isNotEmpty) 'address_pincode': _pincodeCtrl.text.trim(),
     });
     if (!mounted) return;
     if (ok) {
@@ -72,8 +84,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-
-
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
@@ -88,11 +98,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           IconButton(
             icon: Icon(_editing ? Icons.close : Icons.edit_outlined),
             onPressed: () => setState(() {
-              if (_editing) {
-                _nameCtrl.text = user.name;
-                _mobileCtrl.text = user.mobile ?? '';
-                _addressCtrl.text = user.address ?? '';
-              }
+              if (_editing) _populate();
               _editing = !_editing;
             }),
           ),
@@ -101,53 +107,88 @@ class _ProfileScreenState extends State<ProfileScreen> {
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
-          // Avatar
+          // Avatar + name
           Center(
             child: Container(
               width: 90, height: 90,
               decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(AppColors.primary), Color(AppColors.accent)],
-                ),
+                gradient: const LinearGradient(colors: [Color(AppColors.primary), Color(AppColors.accent)]),
                 shape: BoxShape.circle,
-                boxShadow: [BoxShadow(
-                  color: const Color(AppColors.primary).withOpacity(0.3),
-                  blurRadius: 16, offset: const Offset(0, 6),
-                )],
+                boxShadow: [BoxShadow(color: const Color(AppColors.primary).withOpacity(0.3), blurRadius: 16, offset: const Offset(0, 6))],
               ),
-              child: Center(
-                child: Text(
-                  user.name.isNotEmpty ? user.name[0].toUpperCase() : '?',
-                  style: const TextStyle(color: Colors.white, fontSize: 36, fontWeight: FontWeight.w800),
-                ),
-              ),
+              child: Center(child: Text(
+                user.name.isNotEmpty ? user.name[0].toUpperCase() : '?',
+                style: const TextStyle(color: Colors.white, fontSize: 36, fontWeight: FontWeight.w800),
+              )),
             ),
           ),
           const SizedBox(height: 12),
-          Center(child: Text(user.name,
-            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800))),
-          Center(child: Text(user.email,
-            style: TextStyle(fontSize: 14, color: Colors.grey.shade600))),
-          const SizedBox(height: 28),
+          Center(child: Text(user.name, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800))),
+          Center(child: Text(user.email, style: TextStyle(fontSize: 14, color: Colors.grey.shade600))),
+          const SizedBox(height: 16),
+
+          // Coins badge
+          Center(
+            child: GestureDetector(
+              onTap: () => Navigator.pushNamed(context, '/coins'),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                decoration: BoxDecoration(
+                  color: const Color(AppColors.coins).withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: const Color(AppColors.coins).withOpacity(0.3)),
+                ),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  const Text('🪙', style: TextStyle(fontSize: 20)),
+                  const SizedBox(width: 8),
+                  Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text('${user.coinBalance} Coins',
+                      style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: Color(AppColors.coins))),
+                    const Text('Tap to view history', style: TextStyle(fontSize: 11, color: Colors.grey)),
+                  ]),
+                  const SizedBox(width: 8),
+                  const Icon(Icons.chevron_right, color: Color(AppColors.coins), size: 18),
+                ]),
+              ),
+            ),
+          ),
+          const SizedBox(height: 24),
 
           if (_editing) ...[
             _label('Full Name'),
             const SizedBox(height: 8),
-            TextFormField(controller: _nameCtrl,
-              decoration: const InputDecoration(hintText: 'Full name')),
+            TextFormField(controller: _nameCtrl, decoration: const InputDecoration(hintText: 'Full name')),
             const SizedBox(height: 16),
             _label('Mobile Number'),
             const SizedBox(height: 8),
             TextFormField(
-              controller: _mobileCtrl,
-              keyboardType: TextInputType.phone,
+              controller: _mobileCtrl, keyboardType: TextInputType.phone,
               decoration: const InputDecoration(hintText: '9876543210', prefixText: '+91  '),
             ),
-            const SizedBox(height: 16),
-            _label('Address'),
+            const SizedBox(height: 20),
+            _label('Delivery Address'),
             const SizedBox(height: 8),
-            TextFormField(controller: _addressCtrl, maxLines: 2,
-              decoration: const InputDecoration(hintText: 'Your delivery address')),
+            TextFormField(
+              controller: _houseCtrl,
+              decoration: const InputDecoration(labelText: 'House / Flat No. & Building', hintText: 'Flat 4B, Sunrise Apartments'),
+            ),
+            const SizedBox(height: 10),
+            TextFormField(
+              controller: _townCtrl,
+              decoration: const InputDecoration(labelText: 'Town / Area', hintText: 'Indiranagar'),
+            ),
+            const SizedBox(height: 10),
+            Row(children: [
+              Expanded(child: TextFormField(
+                controller: _stateCtrl,
+                decoration: const InputDecoration(labelText: 'State', hintText: 'Karnataka'),
+              )),
+              const SizedBox(width: 10),
+              Expanded(child: TextFormField(
+                controller: _pincodeCtrl, keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: 'Pincode', hintText: '560038'),
+              )),
+            ]),
             const SizedBox(height: 24),
             ElevatedButton(
               onPressed: auth.loading ? null : _save,
@@ -161,8 +202,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
               _infoTile(Icons.email_outlined, 'Email', user.email),
               if (user.mobile != null)
                 _infoTile(Icons.phone_outlined, 'Mobile', '+91 ${user.mobile}'),
-              if (user.address != null)
-                _infoTile(Icons.location_on_outlined, 'Address', user.address!),
+              if (user.fullAddress.isNotEmpty)
+                _infoTile(Icons.location_on_outlined, 'Address', user.fullAddress),
             ]),
           ],
 
@@ -170,16 +211,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
           // Quick links
           _menuCard([
-            _menuItem(Icons.shopping_bag_outlined, 'My Orders',
-              () => Navigator.pushNamed(context, '/orders')),
-            _menuItem(Icons.local_offer_outlined, 'Coupons',
-              () => Navigator.pushNamed(context, '/coupons')),
-            _menuItem(Icons.support_agent_outlined, 'Support',
-              () => Navigator.pushNamed(context, '/support')),
-            _menuItem(Icons.assignment_return_outlined, 'My Refunds',
-              () => Navigator.pushNamed(context, '/refunds')),
-            _menuItem(Icons.notifications_outlined, 'Notifications',
-              () => Navigator.pushNamed(context, '/notifications')),
+            _menuItem(Icons.shopping_bag_outlined, 'My Orders', () => Navigator.pushNamed(context, '/orders')),
+            _menuItem(Icons.monetization_on_outlined, 'My Coins', () => Navigator.pushNamed(context, '/coins'),
+              trailing: user.coinBalance > 0
+                ? Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(color: const Color(AppColors.coins).withOpacity(0.15), borderRadius: BorderRadius.circular(12)),
+                    child: Text('${user.coinBalance}', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12, color: Color(AppColors.coins))),
+                  )
+                : null),
+            _menuItem(Icons.local_offer_outlined, 'Coupons', () => Navigator.pushNamed(context, '/coupons')),
+            _menuItem(Icons.support_agent_outlined, 'Support', () => Navigator.pushNamed(context, '/support')),
+            _menuItem(Icons.assignment_return_outlined, 'My Refunds', () => Navigator.pushNamed(context, '/refunds')),
+            _menuItem(Icons.notifications_outlined, 'Notifications', () => Navigator.pushNamed(context, '/notifications')),
           ]),
 
           const SizedBox(height: 24),
@@ -187,16 +231,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
           OutlinedButton.icon(
             onPressed: _logout,
             icon: const Icon(Icons.logout, color: Color(AppColors.error)),
-            label: const Text('Log Out',
-              style: TextStyle(color: Color(AppColors.error))),
-            style: OutlinedButton.styleFrom(
-              side: const BorderSide(color: Color(AppColors.error))),
+            label: const Text('Log Out', style: TextStyle(color: Color(AppColors.error))),
+            style: OutlinedButton.styleFrom(side: const BorderSide(color: Color(AppColors.error))),
           ),
-
           const SizedBox(height: 32),
-
-    
-          const SizedBox(height: 16),
         ],
       ),
     );
@@ -218,14 +256,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
     child: Row(children: [
       Icon(icon, size: 20, color: const Color(AppColors.primary)),
       const SizedBox(width: 12),
-      Expanded(child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label, style: TextStyle(fontSize: 11, color: Colors.grey.shade500,
-            fontWeight: FontWeight.w600)),
-          Text(value, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-        ],
-      )),
+      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(label, style: TextStyle(fontSize: 11, color: Colors.grey.shade500, fontWeight: FontWeight.w600)),
+        Text(value, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+      ])),
     ]),
   );
 
@@ -237,18 +271,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
     child: Column(children: items),
   );
 
-  Widget _menuItem(IconData icon, String label, VoidCallback onTap) => InkWell(
-    onTap: onTap,
-    borderRadius: BorderRadius.circular(14),
-    child: Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      child: Row(children: [
-        Icon(icon, size: 20, color: const Color(AppColors.primary)),
-        const SizedBox(width: 12),
-        Expanded(child: Text(label,
-          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14))),
-        Icon(Icons.chevron_right, size: 20, color: Colors.grey.shade400),
-      ]),
-    ),
-  );
+  Widget _menuItem(IconData icon, String label, VoidCallback onTap, {Widget? trailing}) =>
+    InkWell(
+      onTap: onTap, borderRadius: BorderRadius.circular(14),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: Row(children: [
+          Icon(icon, size: 20, color: const Color(AppColors.primary)),
+          const SizedBox(width: 12),
+          Expanded(child: Text(label, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14))),
+          if (trailing != null) ...[trailing, const SizedBox(width: 4)],
+          Icon(Icons.chevron_right, size: 20, color: Colors.grey.shade400),
+        ]),
+      ),
+    );
 }

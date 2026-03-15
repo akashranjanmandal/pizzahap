@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart' hide Category;
 import '../models/models.dart';
 import '../services/api_service.dart';
 
-// ─── AUTH PROVIDER ───────────────────────────────────────────────
+// ─── AUTH PROVIDER ────────────────────────────────────────────────
 
 class AuthProvider extends ChangeNotifier {
   User? _user;
@@ -18,6 +18,7 @@ class AuthProvider extends ChangeNotifier {
     await ApiService.init();
     if (ApiService.isLoggedIn) {
       try {
+        _user = await ApiService.getMe();
         notifyListeners();
       } catch (_) {
         await ApiService.clearTokens();
@@ -32,9 +33,7 @@ class AuthProvider extends ChangeNotifier {
       return true;
     } on ApiException catch (e) {
       _error = e.message; return false;
-    } finally {
-      _loading = false; notifyListeners();
-    }
+    } finally { _loading = false; notifyListeners(); }
   }
 
   Future<bool> resendOtp(String email) async {
@@ -54,9 +53,7 @@ class AuthProvider extends ChangeNotifier {
       return true;
     } on ApiException catch (e) {
       _error = e.message; return false;
-    } finally {
-      _loading = false; notifyListeners();
-    }
+    } finally { _loading = false; notifyListeners(); }
   }
 
   Future<bool> register(String name, String email, String otp, {String? mobile}) async {
@@ -67,9 +64,7 @@ class AuthProvider extends ChangeNotifier {
       return true;
     } on ApiException catch (e) {
       _error = e.message; return false;
-    } finally {
-      _loading = false; notifyListeners();
-    }
+    } finally { _loading = false; notifyListeners(); }
   }
 
   Future<void> logout() async {
@@ -82,12 +77,20 @@ class AuthProvider extends ChangeNotifier {
     _loading = true; _error = null; notifyListeners();
     try {
       await ApiService.updateProfile(data);
+      // Refresh user from server to get latest coin_balance + address
+      _user = await ApiService.getMe();
       return true;
     } on ApiException catch (e) {
       _error = e.message; return false;
-    } finally {
-      _loading = false; notifyListeners();
-    }
+    } finally { _loading = false; notifyListeners(); }
+  }
+
+  /// Refresh user (e.g. after order delivered to update coin_balance)
+  Future<void> refreshUser() async {
+    try {
+      _user = await ApiService.getMe();
+      notifyListeners();
+    } catch (_) {}
   }
 
   void clearError() { _error = null; notifyListeners(); }
@@ -102,7 +105,17 @@ class CartProvider extends ChangeNotifier {
   int? _selectedLocationId;
   String? _selectedLocationName;
   String _deliveryType = 'delivery';
-  String? _deliveryAddress;
+  String _paymentMethod = 'cash_on_delivery';
+
+  // Structured delivery address
+  String? _addressHouse;
+  String? _addressTown;
+  String? _addressState;
+  String? _addressPincode;
+
+  // Coins
+  int _coinsToRedeem = 0;
+  int _availableCoins = 0;
 
   List<CartItem> get items => List.unmodifiable(_items);
   String? get couponCode => _appliedCouponCode;
@@ -110,38 +123,45 @@ class CartProvider extends ChangeNotifier {
   int? get selectedLocationId => _selectedLocationId;
   String? get selectedLocationName => _selectedLocationName;
   String get deliveryType => _deliveryType;
-  String? get deliveryAddress => _deliveryAddress;
+  String get paymentMethod => _paymentMethod;
   int get itemCount => _items.fold(0, (sum, item) => sum + item.quantity);
+  int get coinsToRedeem => _coinsToRedeem;
+  int get availableCoins => _availableCoins;
+
+  String? get addressHouse => _addressHouse;
+  String? get addressTown => _addressTown;
+  String? get addressState => _addressState;
+  String? get addressPincode => _addressPincode;
+
+  String get deliveryAddressString {
+    final parts = [_addressHouse, _addressTown, _addressState, _addressPincode]
+        .where((p) => p != null && p!.isNotEmpty).toList();
+    return parts.join(', ');
+  }
+
+  bool get hasDeliveryAddress => _addressHouse != null && _addressHouse!.isNotEmpty
+      && _addressTown != null && _addressTown!.isNotEmpty
+      && _addressPincode != null && _addressPincode!.isNotEmpty;
 
   double get subtotal => _items.fold(0.0, (sum, item) => sum + item.totalPrice);
   double get deliveryFee => _deliveryType == 'pickup' ? 0 : (subtotal < 300 ? 40 : 0);
   double get discount => _appliedCoupon?.calculatedDiscount ?? 0.0;
-  double get tax => (subtotal - discount + deliveryFee) * 0.05;
-  double get total => subtotal - discount + deliveryFee + tax;
+  double get coinsDiscount => _coinsToRedeem.toDouble();
+  double get tax => (subtotal - discount - coinsDiscount + deliveryFee) * 0.05;
+  double get total => subtotal - discount - coinsDiscount + deliveryFee + tax;
 
   bool get isEmpty => _items.isEmpty;
 
   void addItem(CartItem item) {
     final idx = _items.indexWhere((i) => i.uniqueKey == item.uniqueKey);
-    if (idx >= 0) {
-      _items[idx].quantity += item.quantity;
-    } else {
-      _items.add(item);
-    }
+    if (idx >= 0) { _items[idx].quantity += item.quantity; } else { _items.add(item); }
     notifyListeners();
   }
 
-  void removeItem(int index) {
-    _items.removeAt(index);
-    notifyListeners();
-  }
+  void removeItem(int index) { _items.removeAt(index); notifyListeners(); }
 
   void updateQuantity(int index, int quantity) {
-    if (quantity <= 0) {
-      _items.removeAt(index);
-    } else {
-      _items[index].quantity = quantity;
-    }
+    if (quantity <= 0) { _items.removeAt(index); } else { _items[index].quantity = quantity; }
     notifyListeners();
   }
 
@@ -151,13 +171,21 @@ class CartProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  void setDeliveryType(String type) {
-    _deliveryType = type;
+  void setDeliveryType(String type) { _deliveryType = type; notifyListeners(); }
+  void setPaymentMethod(String method) { _paymentMethod = method; notifyListeners(); }
+
+  void setDeliveryAddress({String? house, String? town, String? state, String? pincode}) {
+    _addressHouse = house;
+    _addressTown = town;
+    _addressState = state;
+    _addressPincode = pincode;
     notifyListeners();
   }
 
-  void setDeliveryAddress(String address) {
-    _deliveryAddress = address;
+  void setAvailableCoins(int coins) { _availableCoins = coins; notifyListeners(); }
+
+  void setCoinsToRedeem(int coins) {
+    _coinsToRedeem = coins.clamp(0, _availableCoins);
     notifyListeners();
   }
 
@@ -180,6 +208,11 @@ class CartProvider extends ChangeNotifier {
     _items.clear();
     _appliedCouponCode = null;
     _appliedCoupon = null;
+    _coinsToRedeem = 0;
+    _addressHouse = null;
+    _addressTown = null;
+    _addressState = null;
+    _addressPincode = null;
     notifyListeners();
   }
 }
@@ -223,9 +256,7 @@ class MenuProvider extends ChangeNotifier {
       _featuredProducts = results[1] as List<Product>;
     } on ApiException catch (e) {
       _error = e.message;
-    } finally {
-      _loading = false; notifyListeners();
-    }
+    } finally { _loading = false; notifyListeners(); }
   }
 
   Future<void> loadProducts({int? categoryId, bool? isVeg, String? search}) async {
@@ -240,9 +271,7 @@ class MenuProvider extends ChangeNotifier {
       _products = result['products'] as List<Product>;
     } on ApiException catch (e) {
       _error = e.message;
-    } finally {
-      _loading = false; notifyListeners();
-    }
+    } finally { _loading = false; notifyListeners(); }
   }
 
   Future<void> loadToppingsAndCrusts() async {
@@ -280,9 +309,7 @@ class OrderProvider extends ChangeNotifier {
       _orders = result['orders'] as List<Order>;
     } on ApiException catch (e) {
       _error = e.message;
-    } finally {
-      _loading = false; notifyListeners();
-    }
+    } finally { _loading = false; notifyListeners(); }
   }
 
   Future<void> loadOrder(int id) async {
@@ -291,9 +318,7 @@ class OrderProvider extends ChangeNotifier {
       _currentOrder = await ApiService.getOrder(id);
     } on ApiException catch (e) {
       _error = e.message;
-    } finally {
-      _loading = false; notifyListeners();
-    }
+    } finally { _loading = false; notifyListeners(); }
   }
 
   Future<Map<String, dynamic>?> placeOrder(Map<String, dynamic> data) async {
@@ -302,9 +327,7 @@ class OrderProvider extends ChangeNotifier {
       return await ApiService.placeOrder(data);
     } on ApiException catch (e) {
       _error = e.message; return null;
-    } finally {
-      _loading = false; notifyListeners();
-    }
+    } finally { _loading = false; notifyListeners(); }
   }
 
   Future<bool> cancelOrder(int id, {String? reason}) async {
@@ -320,7 +343,26 @@ class OrderProvider extends ChangeNotifier {
   void clearError() { _error = null; notifyListeners(); }
 }
 
-// ─── NOTIFICATION PROVIDER (DB-based, no FCM) ────────────────────
+// ─── COINS PROVIDER ──────────────────────────────────────────────
+
+class CoinsProvider extends ChangeNotifier {
+  CoinWallet? _wallet;
+  bool _loading = false;
+
+  CoinWallet? get wallet => _wallet;
+  int get balance => _wallet?.balance ?? 0;
+  bool get loading => _loading;
+
+  Future<void> load() async {
+    _loading = true; notifyListeners();
+    try {
+      _wallet = await ApiService.getCoinWallet();
+    } catch (_) {}
+    _loading = false; notifyListeners();
+  }
+}
+
+// ─── NOTIFICATION PROVIDER ───────────────────────────────────────
 
 class NotificationProvider extends ChangeNotifier {
   List<AppNotification> _notifications = [];
@@ -344,6 +386,10 @@ class NotificationProvider extends ChangeNotifier {
   Future<void> markAllRead() async {
     try {
       await ApiService.markAllNotificationsRead();
+      _notifications = _notifications.map((n) => AppNotification(
+        id: n.id, title: n.title, message: n.message, isRead: true,
+        type: n.type, createdAt: n.createdAt,
+      )).toList();
       _unreadCount = 0;
       notifyListeners();
     } catch (_) {}
