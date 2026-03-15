@@ -189,7 +189,6 @@ class Product {
   final List<ProductSize> sizes;
   final List<CrustType> crusts;
   final List<Topping> toppings;
-  // Per-location availability (null = globally available, set when admin fetches with location context)
   final bool? locationAvailable;
 
   Product({

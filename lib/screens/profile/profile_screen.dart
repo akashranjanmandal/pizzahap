@@ -16,8 +16,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final _mobileCtrl = TextEditingController();
   final _addressCtrl = TextEditingController();
 
-  // Secret admin tap counter
-  int _adminTapCount = 0;
 
   @override
   void initState() {
@@ -74,16 +72,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  // Tap the version text 7 times to open admin login
-  void _onVersionTap() {
-    _adminTapCount++;
-    if (_adminTapCount >= 7) {
-      _adminTapCount = 0;
-      Navigator.pushNamed(context, '/login');
-    } else if (_adminTapCount >= 4) {
-      showSnack(context, '${7 - _adminTapCount} more taps for admin panel');
-    }
-  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -206,14 +195,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
           const SizedBox(height: 32),
 
-          // Hidden admin access — tap version 7 times
-          GestureDetector(
-            onTap: _onVersionTap,
-            child: Center(
-              child: Text('PizzaHap v1.0.0',
-                style: TextStyle(color: Colors.grey.shade300, fontSize: 11)),
-            ),
-          ),
+    
           const SizedBox(height: 16),
         ],
       ),

@@ -2,10 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:pinput/pinput.dart';
 import '../../providers/providers.dart';
-import '../../providers/admin_provider.dart';
 import '../../config/app_config.dart';
 import '../../widgets/widgets.dart';
-import '../../services/admin_api_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -19,7 +17,7 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 1, vsync: this);
   }
 
   @override
@@ -108,9 +106,8 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                     unselectedLabelColor: Colors.grey.shade600,
                     labelStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
                     tabs: const [
-                      Tab(text: 'Customer'),
-                      Tab(text: 'Admin'),
-                    ],
+                      Tab(text: 'Customer')
+                                          ],
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -119,7 +116,6 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                     controller: _tabController,
                     children: const [
                       _UserLoginTab(),
-                      _AdminLoginTab(),
                     ],
                   ),
                 ),
@@ -321,145 +317,5 @@ class _UserLoginTabState extends State<_UserLoginTab> {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────
-// ADMIN LOGIN TAB
-// ─────────────────────────────────────────────────────────────────────
 
-class _AdminLoginTab extends StatefulWidget {
-  const _AdminLoginTab();
-  @override
-  State<_AdminLoginTab> createState() => _AdminLoginTabState();
-}
 
-class _AdminLoginTabState extends State<_AdminLoginTab> {
-  final _emailCtrl = TextEditingController();
-  final _passCtrl = TextEditingController();
-  bool _obscure = true;
-  final _formKey = GlobalKey<FormState>();
-  int? _selectedLocationId;
-  List<Map<String, dynamic>> _locations = [];
-  bool _locationsLoaded = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadLocations();
-  }
-
-  @override
-  void dispose() { _emailCtrl.dispose(); _passCtrl.dispose(); super.dispose(); }
-
-  Future<void> _loadLocations() async {
-    try {
-      final locs = await AdminApiService.getLocations();
-      setState(() { _locations = locs; _locationsLoaded = true; });
-    } catch (_) { setState(() => _locationsLoaded = true); }
-  }
-
-  Future<void> _login() async {
-    if (!_formKey.currentState!.validate()) return;
-    final adminProv = context.read<AdminProvider>();
-    final ok = await adminProv.login(_emailCtrl.text.trim(), _passCtrl.text, locationId: _selectedLocationId);
-    if (!mounted) return;
-    if (ok) {
-      Navigator.pushReplacementNamed(context, '/admin/dashboard');
-    } else {
-      showSnack(context, adminProv.error ?? 'Login failed', isError: true);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final adminProv = context.watch<AdminProvider>();
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
-      child: Form(
-        key: _formKey,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Admin Portal', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
-            const SizedBox(height: 6),
-            Text('Manage your PizzaHap branch 🔐', style: TextStyle(fontSize: 14, color: Colors.grey.shade600)),
-            const SizedBox(height: 24),
-
-            const Text('Email', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
-            const SizedBox(height: 8),
-            TextFormField(
-              controller: _emailCtrl,
-              keyboardType: TextInputType.emailAddress,
-              decoration: const InputDecoration(
-                hintText: 'admin@pizzahap.com',
-                prefixIcon: Icon(Icons.email_outlined, color: Color(AppColors.primary)),
-              ),
-              validator: (v) => (v == null || v.isEmpty) ? 'Email required' : null,
-            ),
-            const SizedBox(height: 14),
-
-            const Text('Password', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
-            const SizedBox(height: 8),
-            TextFormField(
-              controller: _passCtrl,
-              obscureText: _obscure,
-              decoration: InputDecoration(
-                hintText: '••••••••',
-                prefixIcon: const Icon(Icons.lock_outline, color: Color(AppColors.primary)),
-                suffixIcon: IconButton(
-                  icon: Icon(_obscure ? Icons.visibility_off_outlined : Icons.visibility_outlined, color: Colors.grey),
-                  onPressed: () => setState(() => _obscure = !_obscure),
-                ),
-              ),
-              validator: (v) => (v == null || v.isEmpty) ? 'Password required' : null,
-              onFieldSubmitted: (_) => _login(),
-            ),
-            const SizedBox(height: 14),
-
-            // Location picker — for super_admin to pick branch
-            const Text('Branch (optional for super admin)', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
-            const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                border: Border.all(color: Colors.grey.shade300),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: _locationsLoaded
-                ? DropdownButtonHideUnderline(
-                    child: DropdownButton<int?>(
-                      value: _selectedLocationId,
-                      hint: Text('All locations', style: TextStyle(color: Colors.grey.shade500, fontSize: 14)),
-                      isExpanded: true,
-                      items: [
-                        DropdownMenuItem<int?>(value: null, child: Text('All locations', style: TextStyle(color: Colors.grey.shade600))),
-                        ..._locations.map((loc) => DropdownMenuItem<int?>(
-                          value: loc['id'] as int,
-                          child: Text(loc['name'] as String, style: const TextStyle(fontSize: 14)),
-                        )),
-                      ],
-                      onChanged: (v) => setState(() => _selectedLocationId = v),
-                    ),
-                  )
-                : const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 14),
-                    child: SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2)),
-                  ),
-            ),
-            const SizedBox(height: 24),
-
-            SizedBox(
-              width: double.infinity,
-              height: 50,
-              child: ElevatedButton(
-                onPressed: adminProv.loading ? null : _login,
-                child: adminProv.loading
-                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                  : const Text('Sign In as Admin', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}

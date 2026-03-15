@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:pizzahap/screens/admin/admin_support_screen.dart';
 import 'package:provider/provider.dart';
 import 'providers/providers.dart';
-import 'providers/admin_provider.dart';
 import 'utils/app_theme.dart';
 
 import 'screens/auth/splash_screen.dart';
@@ -21,8 +19,6 @@ import 'screens/orders/order_detail_screen.dart';
 import 'screens/orders/order_confirm_screen.dart';
 import 'screens/support/support_screens.dart';
 
-import 'screens/admin/admin_shell.dart';
-import 'screens/admin/admin_other_screens.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
@@ -47,7 +43,6 @@ class PizzaHapApp extends StatelessWidget {
       ChangeNotifierProvider(create: (_) => MenuProvider()),
       ChangeNotifierProvider(create: (_) => OrderProvider()),
       ChangeNotifierProvider(create: (_) => NotificationProvider()),
-      ChangeNotifierProvider(create: (_) => AdminProvider()),
     ],
     child: MaterialApp(
       title: 'PizzaHap',
@@ -97,11 +92,6 @@ class PizzaHapApp extends StatelessWidget {
         return _slide(TicketDetailScreen(ticketId: settings.arguments as int));
       case '/refunds':     return _slide(const RefundsScreen());
       case '/coupons':     return _slide(const CouponsScreen());
-
-      case '/admin/dashboard': return _fade(const AdminShell());
-      case '/admin/ticket-detail':
-        return _slide(AdminTicketDetailScreen(ticketId: settings.arguments as int));
-
       default:             return _fade(const MainShell());
     }
   }
