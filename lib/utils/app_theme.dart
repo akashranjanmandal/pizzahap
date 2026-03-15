@@ -83,8 +83,13 @@ class AppTheme {
         borderRadius: BorderRadius.circular(12),
         borderSide: const BorderSide(color: error),
       ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: error, width: 1.5),
+      ),
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       hintStyle: GoogleFonts.nunito(color: const Color(AppColors.textHint), fontSize: 14),
+      errorStyle: GoogleFonts.nunito(color: error, fontSize: 12, fontWeight: FontWeight.w600),
     ),
     cardTheme: CardThemeData(
       elevation: 0,
@@ -110,10 +115,15 @@ class AppTheme {
     ),
     snackBarTheme: SnackBarThemeData(
       backgroundColor: const Color(0xFF1A1A1A),
-      contentTextStyle: GoogleFonts.nunito(color: Colors.white, fontSize: 14),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      contentTextStyle: GoogleFonts.nunito(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       behavior: SnackBarBehavior.floating,
     ),
     dividerTheme: DividerThemeData(color: Colors.grey.shade100, thickness: 1),
+    dialogTheme: DialogThemeData(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      backgroundColor: Colors.white,
+      elevation: 8,
+    ),
   );
 }

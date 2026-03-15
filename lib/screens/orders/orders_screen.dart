@@ -141,7 +141,7 @@ class _OrderCard extends StatelessWidget {
                   ],
                 ),
               ),
-              Text('₹${order.totalAmount.toStringAsFixed(0)}',
+              Text('₹${order.totalAmount}',
                 style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: Color(AppColors.primary))),
             ],
           ),

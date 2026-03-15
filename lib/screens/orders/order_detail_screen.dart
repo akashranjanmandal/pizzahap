@@ -209,7 +209,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                             ],
                           ),
                         ),
-                        Text('₹${item.totalPrice.toStringAsFixed(0)}',
+                        Text('₹${item.totalPrice}',
                           style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
                       ],
                     ),

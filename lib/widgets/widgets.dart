@@ -19,7 +19,7 @@ class PizzaNetImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final widget = url != null && url!.isNotEmpty
+    final child = url != null && url!.isNotEmpty
       ? CachedNetworkImage(
           imageUrl: url!,
           width: width, height: height, fit: fit,
@@ -29,9 +29,9 @@ class PizzaNetImage extends StatelessWidget {
       : _placeholder();
 
     if (borderRadius != null) {
-      return ClipRRect(borderRadius: borderRadius!, child: widget);
+      return ClipRRect(borderRadius: borderRadius!, child: child);
     }
-    return widget;
+    return child;
   }
 
   Widget _shimmer() => Shimmer.fromColors(
@@ -91,17 +91,23 @@ class ProductCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 2))],
+        boxShadow: [BoxShadow(
+          color: Colors.black.withOpacity(0.05),
+          blurRadius: 10, offset: const Offset(0, 2),
+        )],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Stack(
             children: [
-              PizzaNetImage(
-                url: product.imageUrl, height: 140, width: double.infinity,
+              ClipRRect(
                 borderRadius: const BorderRadius.only(
                   topLeft: Radius.circular(16), topRight: Radius.circular(16),
+                ),
+                child: AspectRatio(
+                  aspectRatio: 16 / 10,
+                  child: PizzaNetImage(url: product.imageUrl, width: double.infinity),
                 ),
               ),
               Positioned(top: 10, left: 10, child: VegBadge(isVeg: product.isVeg)),
@@ -114,7 +120,8 @@ class ProductCard extends StatelessWidget {
                       color: const Color(AppColors.accent),
                       borderRadius: BorderRadius.circular(20),
                     ),
-                    child: const Text('⭐ Featured', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w700)),
+                    child: const Text('⭐ Featured',
+                      style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w700)),
                   ),
                 ),
             ],
@@ -124,11 +131,13 @@ class ProductCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(product.name, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                Text(product.name,
+                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
                   maxLines: 1, overflow: TextOverflow.ellipsis),
                 if (product.description != null) ...[
                   const SizedBox(height: 2),
-                  Text(product.description!, style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                  Text(product.description!,
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
                     maxLines: 2, overflow: TextOverflow.ellipsis),
                 ],
                 const SizedBox(height: 8),
@@ -136,12 +145,18 @@ class ProductCard extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text('₹${product.basePrice.toStringAsFixed(0)}',
-                      style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: Color(AppColors.primary))),
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w800, fontSize: 16,
+                        color: Color(AppColors.primary),
+                      )),
                     GestureDetector(
                       onTap: onAddToCart ?? onTap,
                       child: Container(
                         width: 32, height: 32,
-                        decoration: const BoxDecoration(color: Color(AppColors.primary), shape: BoxShape.circle),
+                        decoration: const BoxDecoration(
+                          color: Color(AppColors.primary),
+                          shape: BoxShape.circle,
+                        ),
                         child: const Icon(Icons.add, color: Colors.white, size: 18),
                       ),
                     ),
@@ -193,7 +208,8 @@ class OrderStatusChip extends StatelessWidget {
       color: _color.withOpacity(0.12),
       borderRadius: BorderRadius.circular(20),
     ),
-    child: Text(_label, style: TextStyle(color: _color, fontSize: 12, fontWeight: FontWeight.w700)),
+    child: Text(_label,
+      style: TextStyle(color: _color, fontSize: 12, fontWeight: FontWeight.w700)),
   );
 }
 
@@ -222,7 +238,8 @@ class SectionHeader extends StatelessWidget {
       if (onSeeAll != null)
         TextButton(
           onPressed: onSeeAll,
-          child: const Text('See all', style: TextStyle(color: Color(AppColors.primary), fontWeight: FontWeight.w700)),
+          child: const Text('See all',
+            style: TextStyle(color: Color(AppColors.primary), fontWeight: FontWeight.w700)),
         ),
     ],
   );
@@ -251,10 +268,14 @@ class EmptyState extends StatelessWidget {
         children: [
           Text(emoji, style: const TextStyle(fontSize: 64)),
           const SizedBox(height: 16),
-          Text(title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800), textAlign: TextAlign.center),
+          Text(title,
+            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+            textAlign: TextAlign.center),
           if (subtitle != null) ...[
             const SizedBox(height: 8),
-            Text(subtitle!, style: TextStyle(fontSize: 14, color: Colors.grey.shade600), textAlign: TextAlign.center),
+            Text(subtitle!,
+              style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
+              textAlign: TextAlign.center),
           ],
           if (buttonText != null && onButton != null) ...[
             const SizedBox(height: 24),
@@ -277,17 +298,22 @@ class PriceRow extends StatelessWidget {
   final bool isBold;
   final Color? color;
 
-  const PriceRow({super.key, required this.label, required this.amount, this.isBold = false, this.color});
+  const PriceRow({
+    super.key, required this.label, required this.amount,
+    this.isBold = false, this.color,
+  });
 
   @override
   Widget build(BuildContext context) => Row(
     mainAxisAlignment: MainAxisAlignment.spaceBetween,
     children: [
-      Text(label, style: TextStyle(
-        fontSize: isBold ? 16 : 14,
-        fontWeight: isBold ? FontWeight.w700 : FontWeight.w500,
-        color: color ?? (isBold ? const Color(AppColors.textPrimary) : Colors.grey.shade700),
-      )),
+      Expanded(
+        child: Text(label, style: TextStyle(
+          fontSize: isBold ? 16 : 14,
+          fontWeight: isBold ? FontWeight.w700 : FontWeight.w500,
+          color: color ?? (isBold ? const Color(AppColors.textPrimary) : Colors.grey.shade700),
+        ), overflow: TextOverflow.ellipsis),
+      ),
       Text('₹${amount.toStringAsFixed(2)}', style: TextStyle(
         fontSize: isBold ? 18 : 14,
         fontWeight: isBold ? FontWeight.w800 : FontWeight.w600,
@@ -311,7 +337,9 @@ class LoadingOverlay extends StatelessWidget {
       if (loading)
         Container(
           color: Colors.black26,
-          child: const Center(child: CircularProgressIndicator(color: Color(AppColors.primary))),
+          child: const Center(
+            child: CircularProgressIndicator(color: Color(AppColors.primary)),
+          ),
         ),
     ],
   );
@@ -324,7 +352,12 @@ class QuantityStepper extends StatelessWidget {
   final VoidCallback onIncrement;
   final VoidCallback onDecrement;
 
-  const QuantityStepper({super.key, required this.value, required this.onIncrement, required this.onDecrement});
+  const QuantityStepper({
+    super.key,
+    required this.value,
+    required this.onIncrement,
+    required this.onDecrement,
+  });
 
   @override
   Widget build(BuildContext context) => Row(
@@ -333,7 +366,8 @@ class QuantityStepper extends StatelessWidget {
       _btn(Icons.remove, onDecrement),
       Container(
         width: 36, alignment: Alignment.center,
-        child: Text('$value', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+        child: Text('$value',
+          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
       ),
       _btn(Icons.add, onIncrement),
     ],
@@ -352,13 +386,142 @@ class QuantityStepper extends StatelessWidget {
   );
 }
 
-// ─── SNACK HELPER ─────────────────────────────────────────────────
+// ─── TOP SNACK BANNER ──────────────────────────────────────────────
+// Shows message at the TOP of the screen as an overlay banner
+
+OverlayEntry? _activeSnackOverlay;
 
 void showSnack(BuildContext context, String message, {bool isError = false}) {
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(
-      content: Text(message),
-      backgroundColor: isError ? const Color(AppColors.error) : const Color(0xFF1A1A1A),
+  // Remove any existing overlay
+  _activeSnackOverlay?.remove();
+  _activeSnackOverlay = null;
+
+  final overlay = Overlay.of(context);
+  if (overlay == null) return;
+
+  late OverlayEntry entry;
+  entry = OverlayEntry(
+    builder: (ctx) => _TopSnackBanner(
+      message: message,
+      isError: isError,
+      onDismiss: () {
+        entry.remove();
+        if (_activeSnackOverlay == entry) _activeSnackOverlay = null;
+      },
     ),
   );
+
+  _activeSnackOverlay = entry;
+  overlay.insert(entry);
+}
+
+class _TopSnackBanner extends StatefulWidget {
+  final String message;
+  final bool isError;
+  final VoidCallback onDismiss;
+
+  const _TopSnackBanner({
+    required this.message,
+    required this.isError,
+    required this.onDismiss,
+  });
+
+  @override
+  State<_TopSnackBanner> createState() => _TopSnackBannerState();
+}
+
+class _TopSnackBannerState extends State<_TopSnackBanner>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+  late Animation<Offset> _slide;
+  late Animation<double> _fade;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 300));
+    _slide = Tween<Offset>(begin: const Offset(0, -1), end: Offset.zero)
+        .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOutCubic));
+    _fade = Tween<double>(begin: 0, end: 1)
+        .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOut));
+    _ctrl.forward();
+
+    // Auto dismiss after 3 seconds
+    Future.delayed(const Duration(seconds: 3), () {
+      if (mounted) _dismiss();
+    });
+  }
+
+  void _dismiss() async {
+    if (!mounted) return;
+    await _ctrl.reverse();
+    if (mounted) widget.onDismiss();
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final top = MediaQuery.of(context).padding.top;
+    return Positioned(
+      top: top + 8,
+      left: 16,
+      right: 16,
+      child: SlideTransition(
+        position: _slide,
+        child: FadeTransition(
+          opacity: _fade,
+          child: Material(
+            color: Colors.transparent,
+            child: GestureDetector(
+              onTap: _dismiss,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+                decoration: BoxDecoration(
+                  color: widget.isError
+                      ? const Color(AppColors.error)
+                      : const Color(0xFF1A1A1A),
+                  borderRadius: BorderRadius.circular(14),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.25),
+                      blurRadius: 16, offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      widget.isError
+                          ? Icons.error_outline_rounded
+                          : Icons.check_circle_outline_rounded,
+                      color: Colors.white,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        widget.message,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    const Icon(Icons.close_rounded, color: Colors.white54, size: 16),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }

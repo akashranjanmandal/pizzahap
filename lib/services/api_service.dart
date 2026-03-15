@@ -150,16 +150,6 @@ class ApiService {
     await clearTokens();
   }
 
-  static Future<User> getMe() async {
-    _log('getMe');
-    final response = await http.get(
-      Uri.parse('${AppConfig.baseUrl}${AppStrings.me}'),
-      headers: _headers,
-    );
-    final body = await _handleResponse(response);
-    return User.fromJson(body['data']);
-  }
-
   static Future<void> updateProfile(Map<String, dynamic> data) async {
     _log('updateProfile');
     final response = await http.put(

@@ -18,7 +18,6 @@ class AuthProvider extends ChangeNotifier {
     await ApiService.init();
     if (ApiService.isLoggedIn) {
       try {
-        _user = await ApiService.getMe();
         notifyListeners();
       } catch (_) {
         await ApiService.clearTokens();
@@ -83,7 +82,6 @@ class AuthProvider extends ChangeNotifier {
     _loading = true; _error = null; notifyListeners();
     try {
       await ApiService.updateProfile(data);
-      _user = await ApiService.getMe();
       return true;
     } on ApiException catch (e) {
       _error = e.message; return false;

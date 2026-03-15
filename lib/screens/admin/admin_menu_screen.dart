@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
@@ -126,7 +127,10 @@ class _AdminMenuScreenState extends State<AdminMenuScreen> with SingleTickerProv
                   'is_veg': isVeg, 'is_featured': isFeatured,
                 });
                 if (pickedImage != null && result['product_id'] != null) {
-                  try { await AdminApiService.uploadProductImage(result['product_id'] as int, pickedImage!); } catch (_) {}
+                  try {
+                    final imgUrl = await AdminApiService.uploadProductImage(result['product_id'] as int, pickedImage!);
+                    await CachedNetworkImage.evictFromCache(imgUrl);
+                  } catch (_) {}
                 }
                 if (mounted) { showSnack(context, '✅ Product created!'); _load(); }
               } on ApiException catch (e) {
@@ -178,7 +182,12 @@ class _AdminMenuScreenState extends State<AdminMenuScreen> with SingleTickerProv
                   onPressed: uploadingImage ? null : () async {
                     setModal(() => uploadingImage = true);
                     try {
-                      await AdminApiService.uploadProductImage(p.id, pickedImage!);
+                      final newUrl = await AdminApiService.uploadProductImage(p.id, pickedImage!);
+                      // Evict old image from cache so new one shows immediately
+                      if (p.imageUrl != null) {
+                        await CachedNetworkImage.evictFromCache(p.imageUrl!);
+                      }
+                      await CachedNetworkImage.evictFromCache(newUrl);
                       setModal(() { pickedImage = null; uploadingImage = false; });
                       if (mounted) { showSnack(context,'✅ Image uploaded!'); _load(); }
                     } on ApiException catch (e) {
@@ -329,13 +338,26 @@ class _AdminMenuScreenState extends State<AdminMenuScreen> with SingleTickerProv
   Future<bool> _confirm(BuildContext ctx, String title, String msg) async =>
     await showDialog<bool>(
       context: ctx,
-      builder: (_) => AlertDialog(
-        title: Text(title), content: Text(msg),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          TextButton(onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Confirm', style: TextStyle(color: Color(AppColors.error)))),
-        ],
+      builder: (_) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Text(title, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
+            const SizedBox(height: 10),
+            Text(msg, style: const TextStyle(fontSize: 14), textAlign: TextAlign.center),
+            const SizedBox(height: 20),
+            Row(children: [
+              Expanded(child: OutlinedButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel'))),
+              const SizedBox(width: 12),
+              Expanded(child: ElevatedButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                style: ElevatedButton.styleFrom(backgroundColor: const Color(AppColors.error)),
+                child: const Text('Confirm'),
+              )),
+            ]),
+          ]),
+        ),
       ),
     ) ?? false;
 
