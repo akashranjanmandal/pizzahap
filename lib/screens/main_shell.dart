@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../providers/providers.dart';
 import '../config/app_config.dart';
@@ -15,17 +17,39 @@ class MainShell extends StatefulWidget {
   State<MainShell> createState() => _MainShellState();
 }
 
-class _MainShellState extends State<MainShell> {
+class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
   late int _currentIndex;
   DateTime? _lastBackPressed;
+  late List<AnimationController> _tabControllers;
+  Timer? _notifTimer;
 
   @override
   void initState() {
     super.initState();
     _currentIndex = widget.initialTab;
+    _tabControllers = List.generate(
+        5,
+        (i) => AnimationController(
+            vsync: this, duration: const Duration(milliseconds: 200)));
+    _tabControllers[_currentIndex].forward();
+    // Load notifications on shell init, then poll every 2 minutes
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<NotificationProvider>().load();
+    });
+    _notifTimer = Timer.periodic(const Duration(minutes: 2), (_) {
+      if (mounted) context.read<NotificationProvider>().load();
+    });
   }
 
-  // These are kept alive via IndexedStack - state is preserved across tab switches
+  @override
+  void dispose() {
+    _notifTimer?.cancel();
+    for (final c in _tabControllers) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
   final List<Widget> _screens = const [
     HomeScreen(),
     MenuScreen(),
@@ -34,13 +58,19 @@ class _MainShellState extends State<MainShell> {
     ProfileScreen(),
   ];
 
+  void _setTab(int i) {
+    if (i == _currentIndex) return;
+    _tabControllers[_currentIndex].reverse();
+    setState(() => _currentIndex = i);
+    _tabControllers[i].forward();
+    HapticFeedback.selectionClick();
+  }
+
   Future<bool> _onWillPop() async {
-    // If not on home tab → go home tab (no back button visible)
     if (_currentIndex != 0) {
-      setState(() => _currentIndex = 0);
+      _setTab(0);
       return false;
     }
-    // On home tab: double-back to exit
     final now = DateTime.now();
     if (_lastBackPressed == null ||
         now.difference(_lastBackPressed!) > const Duration(seconds: 2)) {
@@ -54,36 +84,193 @@ class _MainShellState extends State<MainShell> {
   @override
   Widget build(BuildContext context) {
     final cart = context.watch<CartProvider>();
+    // Don't show floating cart when on the cart tab (index 2)
+    final showFloatingCart = cart.itemCount > 0 && _currentIndex != 2;
 
-    return WillPopScope(
-      onWillPop: _onWillPop,
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) async {
+        if (didPop) return;
+        final shouldPop = await _onWillPop();
+        if (shouldPop && context.mounted) Navigator.of(context).pop();
+      },
       child: Scaffold(
-        // No appBar here - each child screen controls its own
         body: IndexedStack(
           index: _currentIndex,
           children: _screens,
         ),
-        bottomNavigationBar: _BottomBar(
+        // Floating cart button — shows on all tabs except cart tab when items in cart
+        floatingActionButton: showFloatingCart
+            ? _FloatingCartButton(
+                itemCount: cart.itemCount,
+                total: cart.total,
+                onTap: () => _setTab(2),
+              )
+            : null,
+        floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+        bottomNavigationBar: _PremiumBottomBar(
           currentIndex: _currentIndex,
           cartCount: cart.itemCount,
-          onTap: (i) => setState(() => _currentIndex = i),
+          onTap: _setTab,
+          controllers: _tabControllers,
+          hasFloatingCart: showFloatingCart,
         ),
       ),
     );
   }
 }
 
-// ─── BOTTOM BAR ───────────────────────────────────────────────────
+// ─── FLOATING CART BUTTON ─────────────────────────────────────────
+class _FloatingCartButton extends StatefulWidget {
+  final int itemCount;
+  final double total;
+  final VoidCallback onTap;
+  const _FloatingCartButton({
+    required this.itemCount,
+    required this.total,
+    required this.onTap,
+  });
+  @override
+  State<_FloatingCartButton> createState() => _FloatingCartButtonState();
+}
 
-class _BottomBar extends StatelessWidget {
+class _FloatingCartButtonState extends State<_FloatingCartButton>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+  late Animation<double> _scale;
+  late Animation<Offset> _slide;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 350));
+    _scale = Tween<double>(begin: 0.7, end: 1.0)
+        .animate(CurvedAnimation(parent: _ctrl, curve: Curves.elasticOut));
+    _slide = Tween<Offset>(begin: const Offset(0, 0.5), end: Offset.zero)
+        .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOutCubic));
+    _ctrl.forward();
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomPad = MediaQuery.of(context).padding.bottom;
+    return SlideTransition(
+      position: _slide,
+      child: ScaleTransition(
+        scale: _scale,
+        child: Padding(
+          // Sits just above the bottom nav bar
+          padding: EdgeInsets.only(bottom: 68 + bottomPad),
+          child: GestureDetector(
+            onTap: () {
+              HapticFeedback.mediumImpact();
+              widget.onTap();
+            },
+            child: Container(
+              height: 54,
+              constraints: const BoxConstraints(minWidth: 200, maxWidth: 300),
+              margin: const EdgeInsets.symmetric(horizontal: 24),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [
+                    Color(AppColors.primary),
+                    Color(AppColors.primaryLight)
+                  ],
+                  begin: Alignment.centerLeft,
+                  end: Alignment.centerRight,
+                ),
+                borderRadius: BorderRadius.circular(27),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(AppColors.primary).withValues(alpha: 0.45),
+                    blurRadius: 16,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 18),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    // Cart icon + count
+                    Row(children: [
+                      Container(
+                        width: 28,
+                        height: 28,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.22),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Center(
+                          child: Text(
+                            '${widget.itemCount}',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Text(
+                        widget.itemCount == 1
+                            ? '1 item in cart'
+                            : '${widget.itemCount} items in cart',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ]),
+                    // Total + arrow
+                    Row(children: [
+                      Text(
+                        '₹${widget.total.toStringAsFixed(0)}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      const Icon(Icons.arrow_forward_ios_rounded,
+                          color: Colors.white, size: 13),
+                    ]),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── PREMIUM BOTTOM BAR ───────────────────────────────────────────
+class _PremiumBottomBar extends StatelessWidget {
   final int currentIndex;
   final int cartCount;
   final ValueChanged<int> onTap;
+  final List<AnimationController> controllers;
+  final bool hasFloatingCart;
 
-  const _BottomBar({
+  const _PremiumBottomBar({
     required this.currentIndex,
     required this.cartCount,
     required this.onTap,
+    required this.controllers,
+    required this.hasFloatingCart,
   });
 
   @override
@@ -93,7 +280,7 @@ class _BottomBar extends StatelessWidget {
         color: Colors.white,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.08),
+            color: Colors.black.withValues(alpha: 0.08),
             blurRadius: 20,
             offset: const Offset(0, -4),
           ),
@@ -102,14 +289,17 @@ class _BottomBar extends StatelessWidget {
       child: SafeArea(
         top: false,
         child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 6),
+          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
           child: Row(
             children: [
-              _tab(context, 0, Icons.home_outlined, Icons.home_rounded, 'Home'),
-              _tab(context, 1, Icons.restaurant_menu_outlined, Icons.restaurant_menu_rounded, 'Menu'),
-              _cartTab(context),
-              _tab(context, 3, Icons.shopping_bag_outlined, Icons.shopping_bag_rounded, 'Orders'),
-              _tab(context, 4, Icons.person_outline_rounded, Icons.person_rounded, 'Profile'),
+              _tab(0, Icons.home_outlined, Icons.home_rounded, 'Home'),
+              _tab(1, Icons.restaurant_menu_outlined,
+                  Icons.restaurant_menu_rounded, 'Menu'),
+              _cartTab(),
+              _tab(3, Icons.receipt_long_outlined, Icons.receipt_long_rounded,
+                  'Orders'),
+              _tab(4, Icons.person_outline_rounded, Icons.person_rounded,
+                  'Profile'),
             ],
           ),
         ),
@@ -117,7 +307,7 @@ class _BottomBar extends StatelessWidget {
     );
   }
 
-  Widget _tab(BuildContext ctx, int idx, IconData icon, IconData activeIcon, String label) {
+  Widget _tab(int idx, IconData icon, IconData activeIcon, String label) {
     final active = currentIndex == idx;
     return Expanded(
       child: GestureDetector(
@@ -127,25 +317,30 @@ class _BottomBar extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             AnimatedContainer(
-              duration: const Duration(milliseconds: 180),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
+              duration: const Duration(milliseconds: 200),
+              curve: Curves.easeOut,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
               decoration: BoxDecoration(
                 color: active
-                    ? const Color(AppColors.primary).withOpacity(0.12)
+                    ? const Color(AppColors.primary).withValues(alpha: 0.12)
                     : Colors.transparent,
-                borderRadius: BorderRadius.circular(24),
+                borderRadius: BorderRadius.circular(26),
               ),
-              child: Icon(
-                active ? activeIcon : icon,
-                size: 22,
-                color: active
-                    ? const Color(AppColors.primary)
-                    : const Color(AppColors.textHint),
+              child: AnimatedScale(
+                scale: active ? 1.08 : 1.0,
+                duration: const Duration(milliseconds: 200),
+                child: Icon(
+                  active ? activeIcon : icon,
+                  size: 22,
+                  color: active
+                      ? const Color(AppColors.primary)
+                      : const Color(AppColors.textHint),
+                ),
               ),
             ),
             const SizedBox(height: 2),
-            Text(
-              label,
+            AnimatedDefaultTextStyle(
+              duration: const Duration(milliseconds: 200),
               style: TextStyle(
                 fontSize: 10,
                 fontWeight: active ? FontWeight.w700 : FontWeight.w500,
@@ -153,6 +348,7 @@ class _BottomBar extends StatelessWidget {
                     ? const Color(AppColors.primary)
                     : const Color(AppColors.textHint),
               ),
+              child: Text(label),
             ),
           ],
         ),
@@ -160,7 +356,7 @@ class _BottomBar extends StatelessWidget {
     );
   }
 
-  Widget _cartTab(BuildContext ctx) {
+  Widget _cartTab() {
     final active = currentIndex == 2;
     return Expanded(
       child: GestureDetector(
@@ -173,38 +369,48 @@ class _BottomBar extends StatelessWidget {
               clipBehavior: Clip.none,
               children: [
                 AnimatedContainer(
-                  duration: const Duration(milliseconds: 180),
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+                  duration: const Duration(milliseconds: 200),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                   decoration: BoxDecoration(
                     color: active
                         ? const Color(AppColors.primary)
-                        : const Color(AppColors.primary).withOpacity(0.08),
-                    borderRadius: BorderRadius.circular(24),
+                        : const Color(AppColors.primary).withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(26),
                   ),
-                  child: Icon(
-                    Icons.shopping_cart_rounded,
-                    size: 22,
-                    color: active ? Colors.white : const Color(AppColors.primary),
+                  child: AnimatedScale(
+                    scale: active ? 1.1 : 1.0,
+                    duration: const Duration(milliseconds: 200),
+                    child: Icon(
+                      Icons.shopping_cart_rounded,
+                      size: 22,
+                      color: active
+                          ? Colors.white
+                          : const Color(AppColors.primary),
+                    ),
                   ),
                 ),
                 if (cartCount > 0)
                   Positioned(
-                    top: -4,
-                    right: -4,
-                    child: Container(
-                      width: 17,
-                      height: 17,
-                      decoration: const BoxDecoration(
-                        color: Color(AppColors.accent),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Center(
-                        child: Text(
-                          cartCount > 9 ? '9+' : '$cartCount',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 9,
-                            fontWeight: FontWeight.w800,
+                    top: -2,
+                    right: -2,
+                    child: AnimatedScale(
+                      scale: cartCount > 0 ? 1.0 : 0.0,
+                      duration: const Duration(milliseconds: 200),
+                      child: Container(
+                        width: 18,
+                        height: 18,
+                        decoration: const BoxDecoration(
+                          color: Color(AppColors.accent),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Center(
+                          child: Text(
+                            cartCount > 9 ? '9+' : '$cartCount',
+                            style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 9,
+                                fontWeight: FontWeight.w800),
                           ),
                         ),
                       ),
@@ -213,8 +419,8 @@ class _BottomBar extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 2),
-            Text(
-              'Cart',
+            AnimatedDefaultTextStyle(
+              duration: const Duration(milliseconds: 200),
               style: TextStyle(
                 fontSize: 10,
                 fontWeight: active ? FontWeight.w700 : FontWeight.w500,
@@ -222,6 +428,7 @@ class _BottomBar extends StatelessWidget {
                     ? const Color(AppColors.primary)
                     : const Color(AppColors.textHint),
               ),
+              child: const Text('Cart'),
             ),
           ],
         ),
@@ -230,13 +437,14 @@ class _BottomBar extends StatelessWidget {
   }
 }
 
-// Simple top snack used by MainShell (no overlay needed here, uses ScaffoldMessenger)
-void showSnackTop(BuildContext context, String message, {bool isError = false}) {
+void showSnackTop(BuildContext context, String message,
+    {bool isError = false}) {
   ScaffoldMessenger.of(context)
     ..clearSnackBars()
     ..showSnackBar(SnackBar(
       content: Text(message,
-        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+          style: const TextStyle(
+              color: Colors.white, fontWeight: FontWeight.w600)),
       backgroundColor:
           isError ? const Color(AppColors.error) : const Color(0xFF1A1A1A),
       behavior: SnackBarBehavior.floating,

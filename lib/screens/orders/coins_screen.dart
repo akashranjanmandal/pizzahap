@@ -79,17 +79,17 @@ class _CoinsScreenState extends State<CoinsScreen> {
                       begin: Alignment.topLeft, end: Alignment.bottomRight,
                     ),
                     borderRadius: BorderRadius.circular(20),
-                    boxShadow: [BoxShadow(color: const Color(AppColors.coins).withOpacity(0.3), blurRadius: 16, offset: const Offset(0, 6))],
+                    boxShadow: [BoxShadow(color: const Color(AppColors.coins).withValues(alpha: 0.3), blurRadius: 16, offset: const Offset(0, 6))],
                   ),
                   child: Column(children: [
-                    const Text('🪙', style: TextStyle(fontSize: 40)),
+                    const Icon(Icons.monetization_on_rounded, color: Color(AppColors.coins), size: 44),
                     const SizedBox(height: 8),
                     Text('$balance', style: const TextStyle(fontSize: 48, fontWeight: FontWeight.w900, color: Colors.white)),
                     const Text('Coins', style: TextStyle(fontSize: 16, color: Colors.white70, fontWeight: FontWeight.w600)),
                     const SizedBox(height: 16),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(20)),
+                      decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(20)),
                       child: Text('Worth ₹$balance', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 14)),
                     ),
                   ]),
@@ -101,18 +101,18 @@ class _CoinsScreenState extends State<CoinsScreen> {
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
                     color: Colors.white, borderRadius: BorderRadius.circular(14),
-                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8)],
+                    boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8)],
                   ),
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     const Text('How Coins Work', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
                     const SizedBox(height: 12),
-                    _ruleRow('🛵', 'Earn', 'Get 1 coin for every ₹10 spent after delivery'),
+                    _ruleRow(Icons.delivery_dining_rounded, 'Earn', 'Get 1 coin for every ₹10 spent after delivery'),
                     const SizedBox(height: 8),
-                    _ruleRow('💰', 'Redeem', '1 coin = ₹1 discount on your next order'),
+                    _ruleRow(Icons.savings_rounded, 'Redeem', '1 coin = ₹1 discount on your next order'),
                     const SizedBox(height: 8),
-                    _ruleRow('🔄', 'Revert', 'Coins are deducted if you get a refund'),
+                    _ruleRow(Icons.refresh_rounded, 'Revert', 'Coins are deducted if you get a refund'),
                     const SizedBox(height: 8),
-                    _ruleRow('✅', 'Credit', 'Coins credited only after order is delivered'),
+                    _ruleRow(Icons.check_circle_outline_rounded, 'Credit', 'Coins credited only after order is delivered'),
                   ]),
                 ),
                 const SizedBox(height: 20),
@@ -127,10 +127,10 @@ class _CoinsScreenState extends State<CoinsScreen> {
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
                       color: Colors.white, borderRadius: BorderRadius.circular(14),
-                      boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8)],
+                      boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8)],
                     ),
                     child: Column(children: [
-                      const Text('🪙', style: TextStyle(fontSize: 40)),
+                      const Icon(Icons.monetization_on_rounded, color: Color(AppColors.coins), size: 44),
                       const SizedBox(height: 12),
                       const Text('No transactions yet', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
                       const SizedBox(height: 4),
@@ -153,8 +153,15 @@ class _CoinsScreenState extends State<CoinsScreen> {
     );
   }
 
-  Widget _ruleRow(String emoji, String title, String desc) => Row(children: [
-    Text(emoji, style: const TextStyle(fontSize: 18)),
+  Widget _ruleRow(IconData icon, String title, String desc) => Row(children: [
+    Container(
+      width: 34, height: 34,
+      decoration: BoxDecoration(
+        color: const Color(AppColors.coins).withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Icon(icon, size: 18, color: const Color(AppColors.coins)),
+    ),
     const SizedBox(width: 10),
     Expanded(child: RichText(text: TextSpan(
       children: [
@@ -178,12 +185,12 @@ class _TxTile extends StatelessWidget {
     padding: const EdgeInsets.all(14),
     decoration: BoxDecoration(
       color: Colors.white, borderRadius: BorderRadius.circular(12),
-      boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 6)],
+      boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 6)],
     ),
     child: Row(children: [
       Container(
         width: 40, height: 40,
-        decoration: BoxDecoration(color: typeColor.withOpacity(0.12), shape: BoxShape.circle),
+        decoration: BoxDecoration(color: typeColor.withValues(alpha: 0.12), shape: BoxShape.circle),
         child: Icon(typeIcon, color: typeColor, size: 20),
       ),
       const SizedBox(width: 12),

@@ -24,24 +24,27 @@ class _BranchSelectionScreenState extends State<BranchSelectionScreen> {
   @override
   void initState() {
     super.initState();
-    // Load plain list without GPS on start — GPS only on user tap
+    // Load plain list without GPS on start  GPS only on user tap
     _loadLocations();
   }
 
   Future<void> _loadLocations() async {
-    setState(() { _loading = true; _locationUsed = false; });
+    setState(() {
+      _loading = true;
+      _locationUsed = false;
+    });
     try {
-      print('Loading locations...'); // Debug print
+      debugPrint('Loading locations...');
       final locs = await ApiService.getLocations();
-      print('Locations loaded: ${locs.length}'); // Debug print
+      debugPrint('Locations loaded: ${locs.length}');
       if (mounted) {
         setState(() {
-        _locations = locs;
-        _loading = false;
-      });
+          _locations = locs;
+          _loading = false;
+        });
       }
     } catch (e) {
-      print('Error loading locations: $e'); // Debug print
+      debugPrint('Error loading locations: $e');
       if (mounted) setState(() => _loading = false);
 
       // Show error to user
@@ -55,9 +58,13 @@ class _BranchSelectionScreenState extends State<BranchSelectionScreen> {
       }
     }
   }
-  // GPS sort — only called when user taps "Use my location"
+
+  // GPS sort  only called when user taps "Use my location"
   Future<void> _detectLocation() async {
-    setState(() { _locating = true; _gpsError = null; });
+    setState(() {
+      _locating = true;
+      _gpsError = null;
+    });
     try {
       LocationPermission perm = await Geolocator.checkPermission();
       if (perm == LocationPermission.denied) {
@@ -75,8 +82,8 @@ class _BranchSelectionScreenState extends State<BranchSelectionScreen> {
       final pos = await Geolocator.getCurrentPosition(
           desiredAccuracy: LocationAccuracy.medium);
 
-      final locs = await ApiService.getLocations(
-          lat: pos.latitude, lng: pos.longitude);
+      final locs =
+          await ApiService.getLocations(lat: pos.latitude, lng: pos.longitude);
 
       if (!mounted) return;
       setState(() {
@@ -87,7 +94,7 @@ class _BranchSelectionScreenState extends State<BranchSelectionScreen> {
         _gpsError = null;
       });
 
-      showSnack(context, '📍 Branches sorted by your distance');
+      AppToast.info(context, 'Branches sorted by distance');
     } catch (_) {
       if (mounted) {
         setState(() {
@@ -102,7 +109,7 @@ class _BranchSelectionScreenState extends State<BranchSelectionScreen> {
 
   void _confirmBranch() {
     if (_selected == null) {
-      showSnack(context, 'Please select a branch to continue', isError: true);
+      AppToast.error(context, 'Please select a branch to continue');
       return;
     }
     context.read<CartProvider>().setLocation(_selected!.id, _selected!.name);
@@ -114,11 +121,12 @@ class _BranchSelectionScreenState extends State<BranchSelectionScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(AppColors.background),
+      floatingActionButton: const CartFAB(),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-
             // ── Header ──────────────────────────────────────────────
             Container(
               width: double.infinity,
@@ -127,7 +135,10 @@ class _BranchSelectionScreenState extends State<BranchSelectionScreen> {
                 gradient: LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
-                  colors: [Color(AppColors.primaryDark), Color(AppColors.primary)],
+                  colors: [
+                    Color(AppColors.primaryDark),
+                    Color(AppColors.primary)
+                  ],
                 ),
               ),
               child: Column(
@@ -145,7 +156,7 @@ class _BranchSelectionScreenState extends State<BranchSelectionScreen> {
                   Text(
                     'Pick a location manually or tap below to sort by distance',
                     style: TextStyle(
-                      color: Colors.white.withOpacity(0.8),
+                      color: Colors.white.withValues(alpha: 0.8),
                       fontSize: 13,
                       height: 1.4,
                     ),
@@ -164,10 +175,10 @@ class _BranchSelectionScreenState extends State<BranchSelectionScreen> {
                       decoration: BoxDecoration(
                         color: _locationUsed
                             ? Colors.white
-                            : Colors.white.withOpacity(0.18),
+                            : Colors.white.withValues(alpha: 0.18),
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
-                          color: Colors.white.withOpacity(0.4),
+                          color: Colors.white.withValues(alpha: 0.4),
                         ),
                       ),
                       child: Row(
@@ -195,8 +206,8 @@ class _BranchSelectionScreenState extends State<BranchSelectionScreen> {
                             _locating
                                 ? 'Detecting location...'
                                 : _locationUsed
-                                ? 'Sorted by distance'
-                                : 'Use my location',
+                                    ? 'Sorted by distance'
+                                    : 'Use my location',
                             style: TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w700,
@@ -211,7 +222,7 @@ class _BranchSelectionScreenState extends State<BranchSelectionScreen> {
                               Icons.close,
                               size: 14,
                               color: const Color(AppColors.primary)
-                                  .withOpacity(0.6),
+                                  .withValues(alpha: 0.6),
                             ),
                             const SizedBox(width: 2),
                             Text(
@@ -219,7 +230,7 @@ class _BranchSelectionScreenState extends State<BranchSelectionScreen> {
                               style: TextStyle(
                                 fontSize: 11,
                                 color: const Color(AppColors.primary)
-                                    .withOpacity(0.7),
+                                    .withValues(alpha: 0.7),
                               ),
                             ),
                           ],
@@ -254,215 +265,201 @@ class _BranchSelectionScreenState extends State<BranchSelectionScreen> {
             Expanded(
               child: _loading
                   ? const Center(
-                  child: CircularProgressIndicator(
-                      color: Color(AppColors.primary)))
+                      child: CircularProgressIndicator(
+                          color: Color(AppColors.primary)))
                   : _locations.isEmpty
-                  ? Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Text('😕',
-                        style: TextStyle(fontSize: 48)),
-                    const SizedBox(height: 12),
-                    Text(
-                      'No branches found',
-                      style: TextStyle(
-                          color: Colors.grey.shade600,
-                          fontSize: 16),
-                    ),
-                  ],
-                ),
-              )
-                  : ListView.builder(
-                padding:
-                const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                itemCount: _locations.length,
-                itemBuilder: (context, index) {
-                  final loc = _locations[index];
-                  final isSelected = _selected?.id == loc.id;
-                  final isNearest = _locationUsed && index == 0;
-
-                  return GestureDetector(
-                    onTap: () =>
-                        setState(() => _selected = loc),
-                    child: AnimatedContainer(
-                      duration:
-                      const Duration(milliseconds: 180),
-                      margin:
-                      const EdgeInsets.only(bottom: 12),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius:
-                        BorderRadius.circular(16),
-                        border: Border.all(
-                          color: isSelected
-                              ? const Color(AppColors.primary)
-                              : Colors.transparent,
-                          width: 2,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: isSelected
-                                ? const Color(AppColors.primary)
-                                .withOpacity(0.12)
-                                : Colors.black.withOpacity(0.05),
-                            blurRadius: 10,
-                            offset: const Offset(0, 3),
+                      ? Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.sentiment_dissatisfied_rounded,
+                                  size: 48, color: Colors.grey),
+                              const SizedBox(height: 12),
+                              Text(
+                                'No branches found',
+                                style: TextStyle(
+                                    color: Colors.grey.shade600, fontSize: 16),
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(14),
-                        child: Row(
-                          children: [
-                            // Store icon
-                            AnimatedContainer(
-                              duration: const Duration(
-                                  milliseconds: 180),
-                              width: 46,
-                              height: 46,
-                              decoration: BoxDecoration(
-                                color: isSelected
-                                    ? const Color(
-                                    AppColors.primary)
-                                    .withOpacity(0.1)
-                                    : Colors.grey.shade100,
-                                borderRadius:
-                                BorderRadius.circular(12),
-                              ),
-                              child: Icon(
-                                Icons.store_rounded,
-                                color: isSelected
-                                    ? const Color(
-                                    AppColors.primary)
-                                    : Colors.grey.shade400,
-                                size: 22,
-                              ),
-                            ),
-                            const SizedBox(width: 14),
+                        )
+                      : ListView.builder(
+                          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                          itemCount: _locations.length,
+                          itemBuilder: (context, index) {
+                            final loc = _locations[index];
+                            final isSelected = _selected?.id == loc.id;
+                            final isNearest = _locationUsed && index == 0;
 
-                            // Name / address / meta
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment:
-                                CrossAxisAlignment.start,
-                                children: [
-                                  Row(children: [
-                                    Expanded(
-                                      child: Text(
-                                        loc.name,
-                                        style: TextStyle(
-                                          fontWeight:
-                                          FontWeight.w700,
-                                          fontSize: 14,
-                                          color: isSelected
-                                              ? const Color(
-                                              AppColors.primary)
-                                              : const Color(
-                                              AppColors
-                                                  .textPrimary),
-                                        ),
-                                      ),
-                                    ),
-                                    if (isNearest)
-                                      Container(
-                                        padding: const EdgeInsets
-                                            .symmetric(
-                                            horizontal: 7,
-                                            vertical: 3),
-                                        decoration: BoxDecoration(
-                                          color: const Color(
-                                              AppColors.success)
-                                              .withOpacity(0.12),
-                                          borderRadius:
-                                          BorderRadius.circular(
-                                              6),
-                                        ),
-                                        child: const Text(
-                                          '📍 Nearest',
-                                          style: TextStyle(
-                                            color: Color(
-                                                AppColors.success),
-                                            fontSize: 10,
-                                            fontWeight:
-                                            FontWeight.w700,
-                                          ),
-                                        ),
-                                      ),
-                                  ]),
-                                  const SizedBox(height: 3),
-                                  Text(
-                                    loc.address,
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: Colors.grey.shade500,
-                                      height: 1.4,
-                                    ),
-                                    maxLines: 2,
-                                    overflow:
-                                    TextOverflow.ellipsis,
+                            return GestureDetector(
+                              onTap: () => setState(() => _selected = loc),
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 180),
+                                margin: const EdgeInsets.only(bottom: 12),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(
+                                    color: isSelected
+                                        ? const Color(AppColors.primary)
+                                        : Colors.transparent,
+                                    width: 2,
                                   ),
-                                  if (loc.phone != null ||
-                                      loc.distanceKm != null) ...[
-                                    const SizedBox(height: 5),
-                                    Row(children: [
-                                      if (loc.phone != null) ...[
-                                        Icon(Icons.phone_outlined,
-                                            size: 11,
-                                            color: Colors
-                                                .grey.shade400),
-                                        const SizedBox(width: 3),
-                                        Text(loc.phone!,
-                                            style: TextStyle(
-                                                fontSize: 11,
-                                                color: Colors.grey
-                                                    .shade500)),
-                                      ],
-                                      if (loc.phone != null &&
-                                          loc.distanceKm != null)
-                                        const SizedBox(width: 10),
-                                      if (loc.distanceKm !=
-                                          null) ...[
-                                        Icon(
-                                            Icons.near_me_outlined,
-                                            size: 11,
-                                            color: Colors
-                                                .grey.shade400),
-                                        const SizedBox(width: 3),
-                                        Text(
-                                          '${loc.distanceKm!.toStringAsFixed(1)} km away',
-                                          style: TextStyle(
-                                              fontSize: 11,
-                                              color: Colors.grey
-                                                  .shade500),
-                                        ),
-                                      ],
-                                    ]),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: isSelected
+                                          ? const Color(AppColors.primary)
+                                              .withValues(alpha: 0.12)
+                                          : Colors.black.withValues(alpha: 0.05),
+                                      blurRadius: 10,
+                                      offset: const Offset(0, 3),
+                                    ),
                                   ],
-                                ],
-                              ),
-                            ),
-
-                            // Selected check
-                            if (isSelected)
-                              Container(
-                                width: 22,
-                                height: 22,
-                                decoration: const BoxDecoration(
-                                  color: Color(AppColors.primary),
-                                  shape: BoxShape.circle,
                                 ),
-                                child: const Icon(Icons.check,
-                                    color: Colors.white,
-                                    size: 13),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(14),
+                                  child: Row(
+                                    children: [
+                                      // Store icon
+                                      AnimatedContainer(
+                                        duration:
+                                            const Duration(milliseconds: 180),
+                                        width: 46,
+                                        height: 46,
+                                        decoration: BoxDecoration(
+                                          color: isSelected
+                                              ? const Color(AppColors.primary)
+                                                  .withValues(alpha: 0.1)
+                                              : Colors.grey.shade100,
+                                          borderRadius:
+                                              BorderRadius.circular(12),
+                                        ),
+                                        child: Icon(
+                                          Icons.store_rounded,
+                                          color: isSelected
+                                              ? const Color(AppColors.primary)
+                                              : Colors.grey.shade400,
+                                          size: 22,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 14),
+
+                                      // Name / address / meta
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Row(children: [
+                                              Expanded(
+                                                child: Text(
+                                                  loc.name,
+                                                  style: TextStyle(
+                                                    fontWeight: FontWeight.w700,
+                                                    fontSize: 14,
+                                                    color: isSelected
+                                                        ? const Color(
+                                                            AppColors.primary)
+                                                        : const Color(AppColors
+                                                            .textPrimary),
+                                                  ),
+                                                ),
+                                              ),
+                                              if (isNearest)
+                                                Container(
+                                                  padding: const EdgeInsets
+                                                      .symmetric(
+                                                      horizontal: 7,
+                                                      vertical: 3),
+                                                  decoration: BoxDecoration(
+                                                    color: const Color(
+                                                            AppColors.success)
+                                                        .withValues(alpha: 0.12),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            6),
+                                                  ),
+                                                  child: const Text(
+                                                    'Nearest',
+                                                    style: TextStyle(
+                                                      color: Color(
+                                                          AppColors.success),
+                                                      fontSize: 10,
+                                                      fontWeight:
+                                                          FontWeight.w700,
+                                                    ),
+                                                  ),
+                                                ),
+                                            ]),
+                                            const SizedBox(height: 3),
+                                            Text(
+                                              loc.address,
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                color: Colors.grey.shade500,
+                                                height: 1.4,
+                                              ),
+                                              maxLines: 2,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                            if (loc.phone != null ||
+                                                loc.distanceKm != null) ...[
+                                              const SizedBox(height: 5),
+                                              Row(children: [
+                                                if (loc.phone != null) ...[
+                                                  Icon(Icons.phone_outlined,
+                                                      size: 11,
+                                                      color:
+                                                          Colors.grey.shade400),
+                                                  const SizedBox(width: 3),
+                                                  Text(loc.phone!,
+                                                      style: TextStyle(
+                                                          fontSize: 11,
+                                                          color: Colors
+                                                              .grey.shade500)),
+                                                ],
+                                                if (loc.phone != null &&
+                                                    loc.distanceKm != null)
+                                                  const SizedBox(width: 10),
+                                                if (loc.distanceKm != null) ...[
+                                                  Icon(Icons.near_me_outlined,
+                                                      size: 11,
+                                                      color:
+                                                          Colors.grey.shade400),
+                                                  const SizedBox(width: 3),
+                                                  Text(
+                                                    '${loc.distanceKm!.toStringAsFixed(1)} km away',
+                                                    style: TextStyle(
+                                                        fontSize: 11,
+                                                        color: Colors
+                                                            .grey.shade500),
+                                                  ),
+                                                ],
+                                              ]),
+                                            ],
+                                          ],
+                                        ),
+                                      ),
+
+                                      // Selected check
+                                      if (isSelected)
+                                        Container(
+                                          width: 22,
+                                          height: 22,
+                                          decoration: const BoxDecoration(
+                                            color: Color(AppColors.primary),
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: const Icon(Icons.check,
+                                              color: Colors.white, size: 13),
+                                        ),
+                                    ],
+                                  ),
+                                ),
                               ),
-                          ],
+                            );
+                          },
                         ),
-                      ),
-                    ),
-                  );
-                },
-              ),
             ),
 
             // ── Confirm bar ──────────────────────────────────────────
@@ -472,7 +469,7 @@ class _BranchSelectionScreenState extends State<BranchSelectionScreen> {
                 color: Colors.white,
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.06),
+                    color: Colors.black.withValues(alpha: 0.06),
                     blurRadius: 12,
                     offset: const Offset(0, -4),
                   ),

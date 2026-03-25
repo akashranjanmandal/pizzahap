@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/providers.dart';
 import '../../config/app_config.dart';
-import '../../services/api_service.dart';
 import '../../widgets/widgets.dart';
+import '../../widgets/app_loader.dart';
+import '../../services/api_service.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class CheckoutScreen extends StatefulWidget {
   const CheckoutScreen({super.key});
@@ -14,63 +16,98 @@ class CheckoutScreen extends StatefulWidget {
 class _CheckoutScreenState extends State<CheckoutScreen> {
   String _deliveryType = 'delivery';
   String _paymentMethod = 'cash_on_delivery';
-
-  // Structured address controllers
-  final _houseCtrl        = TextEditingController();
-  final _townCtrl         = TextEditingController();
-  final _stateCtrl        = TextEditingController();
-  final _pincodeCtrl      = TextEditingController();
-  final _instructionsCtrl = TextEditingController();
-
   bool _placingOrder = false;
   bool _useCoins = false;
+  bool _addressInitialized = false;
+
+  final _houseCtrl = TextEditingController();
+  final _townCtrl = TextEditingController();
+  final _stateCtrl = TextEditingController();
+  final _pincodeCtrl = TextEditingController();
+  final _instructionsCtrl = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    // Pre-fill saved address from user profile
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final user = context.read<AuthProvider>().user;
-      if (user != null) {
-        _houseCtrl.text   = user.addressHouse ?? '';
-        _townCtrl.text    = user.addressTown ?? '';
-        _stateCtrl.text   = user.addressState ?? '';
-        _pincodeCtrl.text = user.addressPincode ?? '';
-        // Set available coins in cart
-        context.read<CartProvider>().setAvailableCoins(user.coinBalance);
-      }
-    });
+    WidgetsBinding.instance.addPostFrameCallback((_) => _initFromUser());
+  }
+
+  /// Pull address + coin balance from the user profile (live from server)
+  void _initFromUser() {
+    final user = context.read<AuthProvider>().user;
+    if (user == null) return;
+    // Pre-fill address from profile — only on first open
+    if (!_addressInitialized) {
+      _houseCtrl.text = user.addressHouse ?? '';
+      _townCtrl.text = user.addressTown ?? '';
+      _stateCtrl.text = user.addressState ?? '';
+      _pincodeCtrl.text = user.addressPincode ?? '';
+      _addressInitialized = true;
+    }
+    // Set available coins in cart provider
+    context.read<CartProvider>().setAvailableCoins(user.coinBalance);
   }
 
   @override
   void dispose() {
-    _houseCtrl.dispose(); _townCtrl.dispose();
-    _stateCtrl.dispose(); _pincodeCtrl.dispose();
+    _houseCtrl.dispose();
+    _townCtrl.dispose();
+    _stateCtrl.dispose();
+    _pincodeCtrl.dispose();
     _instructionsCtrl.dispose();
     super.dispose();
   }
 
   bool get _hasAddress =>
-    _houseCtrl.text.trim().isNotEmpty &&
-    _townCtrl.text.trim().isNotEmpty &&
-    _pincodeCtrl.text.trim().isNotEmpty;
+      _houseCtrl.text.trim().isNotEmpty &&
+      _townCtrl.text.trim().isNotEmpty &&
+      _pincodeCtrl.text.trim().isNotEmpty;
 
   Future<void> _placeOrder() async {
     final cart = context.read<CartProvider>();
     if (cart.selectedLocationId == null) {
-      showSnack(context, 'No branch selected.', isError: true); return;
+      AppToast.error(context, 'No branch selected.');
+      return;
     }
     if (_deliveryType == 'delivery' && !_hasAddress) {
-      showSnack(context, 'Please fill in your delivery address (house, town, pincode)', isError: true);
+      AppToast.error(context, 'Please fill in your delivery address');
       return;
     }
 
     setState(() => _placingOrder = true);
+    AppLoader.show(context, message: 'Placing your order...');
+
+    // Auto-save address to profile so it persists for next order
+    final user = context.read<AuthProvider>().user;
+    if (_deliveryType == 'delivery' && _hasAddress && user != null) {
+      final houseChanged = _houseCtrl.text.trim() != (user.addressHouse ?? '');
+      final townChanged = _townCtrl.text.trim() != (user.addressTown ?? '');
+      if (houseChanged || townChanged) {
+        // Fire-and-forget — don't block order placement
+        context.read<AuthProvider>().updateProfile({
+          if (_houseCtrl.text.trim().isNotEmpty)
+            'address_house': _houseCtrl.text.trim(),
+          if (_townCtrl.text.trim().isNotEmpty)
+            'address_town': _townCtrl.text.trim(),
+          if (_stateCtrl.text.trim().isNotEmpty)
+            'address_state': _stateCtrl.text.trim(),
+          if (_pincodeCtrl.text.trim().isNotEmpty)
+            'address_pincode': _pincodeCtrl.text.trim(),
+        });
+      }
+    }
+
     final orderProvider = context.read<OrderProvider>();
+    final coinsToSend =
+        (_useCoins && cart.coinsToRedeem > 0) ? cart.coinsToRedeem : 0;
 
     final deliveryAddr = _deliveryType == 'delivery'
-        ? [_houseCtrl.text.trim(), _townCtrl.text.trim(), _stateCtrl.text.trim(), _pincodeCtrl.text.trim()]
-            .where((s) => s.isNotEmpty).join(', ')
+        ? [
+            _houseCtrl.text.trim(),
+            _townCtrl.text.trim(),
+            _stateCtrl.text.trim(),
+            _pincodeCtrl.text.trim()
+          ].where((s) => s.isNotEmpty).join(', ')
         : null;
 
     final orderData = <String, dynamic>{
@@ -82,382 +119,809 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       if (_instructionsCtrl.text.trim().isNotEmpty)
         'special_instructions': _instructionsCtrl.text.trim(),
       'payment_method': _paymentMethod,
-      if (_useCoins && cart.coinsToRedeem > 0) 'coins_to_redeem': cart.coinsToRedeem,
+      if (coinsToSend > 0) 'coins_to_redeem': coinsToSend,
     };
 
     final result = await orderProvider.placeOrder(orderData);
-    setState(() => _placingOrder = false);
-    if (!mounted) return;
+    
+    if (result == null) {
+      AppLoader.hide();
+      setState(() => _placingOrder = false);
+      if (!mounted) return;
+      AppToast.error(context, orderProvider.error ?? 'Failed to place order');
+      return;
+    }
 
-    if (result != null) {
-      final orderId = result['order_id'];
-      if (_paymentMethod == 'online') {
-        try { await ApiService.createPaymentOrder(orderId, _paymentMethod); } catch (_) {}
+    if (_paymentMethod == 'online') {
+      try {
+        final payResult = await ApiService.createPaymentOrder(result['order_id'], 'payu');
+        final String? payUrl = payResult['payment_url'] ?? payResult['url'] ?? payResult['redirect_url'];
+        
+        AppLoader.hide();
+        setState(() => _placingOrder = false);
+        if (!mounted) return;
+
+        if (payUrl != null && payUrl.isNotEmpty) {
+          final Uri uri = Uri.parse(payUrl);
+          // Launch external browser for payment
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
+          
+          if (!mounted) return;
+          // Redirect to order details instead of confirm screen, as payment is pending
+          AppToast.success(context, 'Order placed! Please complete payment.');
+          cart.clear();
+          context.read<AuthProvider>().refreshUser();
+          Navigator.pushNamedAndRemoveUntil(
+            context,
+            '/order-detail',
+            (r) => false,
+            arguments: result['order_id'],
+          );
+          return;
+        } else {
+          AppToast.error(context, 'Payment gateway returned no URL. Please check My Orders.');
+        }
+      } catch (e) {
+        AppLoader.hide();
+        setState(() => _placingOrder = false);
+        if (!mounted) return;
+        AppToast.error(context, 'Payment error: $e');
       }
+    } else {
+      // Cash on Delivery flow
+      AppLoader.hide();
+      setState(() => _placingOrder = false);
+      if (!mounted) return;
+      AppToast.success(context, 'Order placed successfully!');
       cart.clear();
-      // Refresh coin balance
       context.read<AuthProvider>().refreshUser();
       Navigator.pushNamedAndRemoveUntil(
-        context, '/order-confirm', (r) => r.settings.name == '/home',
+        context,
+        '/order-confirm',
+        (r) => r.settings.name == '/home',
         arguments: {
-          'order_id': orderId,
+          'order_id': result['order_id'],
           'order_number': result['order_number'],
           'total': result['total_amount'],
           'coins_redeemed': result['coins_redeemed'] ?? 0,
         },
       );
+    }
+  }
+
+  void _toggleCoins(bool val, CartProvider cart, int coinBalance) {
+    setState(() => _useCoins = val);
+    if (val) {
+      final maxRedeem = coinBalance.clamp(
+        0,
+        (cart.subtotal - cart.discount + cart.deliveryFee).floor(),
+      );
+      cart.setCoinsToRedeem(maxRedeem);
     } else {
-      showSnack(context, orderProvider.error ?? 'Failed to place order', isError: true);
+      cart.setCoinsToRedeem(0);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final cart = context.watch<CartProvider>();
-    final user = context.watch<AuthProvider>().user;
-    final coinBalance = user?.coinBalance ?? 0;
-    final coinsDiscount = _useCoins ? cart.coinsToRedeem.toDouble() : 0.0;
+    final auth = context.watch<AuthProvider>();
+    final coinBalance = auth.user?.coinBalance ?? 0;
 
-    return LoadingOverlay(
-      loading: _placingOrder,
-      child: Scaffold(
-        backgroundColor: const Color(AppColors.background),
-        appBar: AppBar(title: const Text('Checkout')),
-        body: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
-          children: [
+    // Sync available coins when user state updates
+    if (auth.user != null && cart.availableCoins != auth.user!.coinBalance) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) cart.setAvailableCoins(auth.user!.coinBalance);
+      });
+    }
 
-            // ── Branch ──────────────────────────────────────────
+    final coinsOff = _useCoins ? cart.coinsToRedeem.toDouble() : 0.0;
+    final finalTotal =
+        (cart.subtotal - cart.discount - coinsOff + cart.deliveryFee)
+            .clamp(0.0, double.infinity);
+
+    return Scaffold(
+      backgroundColor: const Color(AppColors.background),
+      appBar: AppBar(title: const Text('Checkout')),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+        children: [
+          // ── Branch ──────────────────────────────────────────────────
+          _SectionCard(
+            icon: Icons.store_rounded,
+            title: 'Branch',
+            child: Row(children: [
+              Expanded(
+                  child: Text(
+                cart.selectedLocationName ?? 'No branch selected',
+                style:
+                    const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+              )),
+              TextButton(
+                onPressed: () =>
+                    Navigator.pushNamed(context, '/branch-selection'),
+                style: TextButton.styleFrom(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    minimumSize: Size.zero),
+                child: const Text('Change', style: TextStyle(fontSize: 12)),
+              ),
+            ]),
+          ),
+          const SizedBox(height: 12),
+
+          // ── Delivery Type ────────────────────────────────────────────
+          _SectionCard(
+            icon: Icons.delivery_dining_rounded,
+            title: 'Delivery Type',
+            child: Row(children: [
+              Expanded(
+                  child: _TypeButton(
+                label: 'Delivery',
+                icon: Icons.delivery_dining_rounded,
+                selected: _deliveryType == 'delivery',
+                onTap: () => setState(() => _deliveryType = 'delivery'),
+              )),
+              const SizedBox(width: 10),
+              Expanded(
+                  child: _TypeButton(
+                label: 'Pickup',
+                icon: Icons.storefront_rounded,
+                selected: _deliveryType == 'pickup',
+                onTap: () => setState(() => _deliveryType = 'pickup'),
+              )),
+            ]),
+          ),
+          const SizedBox(height: 12),
+
+          // ── Delivery Address ─────────────────────────────────────────
+          if (_deliveryType == 'delivery') ...[
             _SectionCard(
-              title: '📍 Branch',
-              child: Row(children: [
-                Container(
-                  width: 40, height: 40,
-                  decoration: BoxDecoration(
-                    color: const Color(AppColors.primary).withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(10),
+              icon: Icons.location_on_rounded,
+              title: 'Delivery Address',
+              subtitle: 'Saved to your profile',
+              child: Column(children: [
+                TextFormField(
+                  controller: _houseCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'House / Flat No. & Building *',
+                    hintText: 'Flat 4B, Sunrise Apartments',
+                    contentPadding:
+                        EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                   ),
-                  child: const Icon(Icons.store_rounded, color: Color(AppColors.primary), size: 20),
                 ),
-                const SizedBox(width: 12),
-                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(cart.selectedLocationName ?? 'No branch selected',
-                    style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
-                ])),
-                TextButton(
-                  onPressed: () => Navigator.pushNamed(context, '/branch-selection'),
-                  style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6), minimumSize: Size.zero),
-                  child: const Text('Change', style: TextStyle(fontSize: 12)),
+                const SizedBox(height: 10),
+                TextFormField(
+                  controller: _townCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Town / Area *',
+                    hintText: 'Indiranagar',
+                    contentPadding:
+                        EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  ),
                 ),
-              ]),
-            ),
-            const SizedBox(height: 12),
-
-            // ── Delivery type ────────────────────────────────────
-            _SectionCard(
-              title: '🚚 Delivery Type',
-              child: Row(children: [
-                Expanded(child: _TypeButton(label: '🛵 Delivery', selected: _deliveryType == 'delivery',
-                  onTap: () => setState(() => _deliveryType = 'delivery'))),
-                const SizedBox(width: 10),
-                Expanded(child: _TypeButton(label: '🏪 Pickup', selected: _deliveryType == 'pickup',
-                  onTap: () => setState(() => _deliveryType = 'pickup'))),
-              ]),
-            ),
-            const SizedBox(height: 12),
-
-            // ── Structured delivery address ───────────────────────
-            if (_deliveryType == 'delivery') ...[
-              _SectionCard(
-                title: '🏠 Delivery Address',
-                child: Column(children: [
-                  TextFormField(
-                    controller: _houseCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'House / Flat No. & Building *',
-                      hintText: 'e.g. Flat 4B, Sunrise Apartments',
-                      contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  TextFormField(
-                    controller: _townCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'Town / Area *',
-                      hintText: 'e.g. Indiranagar',
-                      contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Row(children: [
-                    Expanded(
+                const SizedBox(height: 10),
+                Row(children: [
+                  Expanded(
                       child: TextFormField(
-                        controller: _stateCtrl,
-                        decoration: const InputDecoration(
-                          labelText: 'State',
-                          hintText: 'e.g. Karnataka',
-                          contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                        ),
-                      ),
+                    controller: _stateCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'State',
+                      hintText: 'Karnataka',
+                      contentPadding:
+                          EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                     ),
-                    const SizedBox(width: 10),
-                    Expanded(
+                  )),
+                  const SizedBox(width: 10),
+                  Expanded(
                       child: TextFormField(
-                        controller: _pincodeCtrl,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(
-                          labelText: 'Pincode *',
-                          hintText: '560038',
-                          contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                        ),
-                      ),
+                    controller: _pincodeCtrl,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Pincode *',
+                      hintText: '560038',
+                      contentPadding:
+                          EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                     ),
-                  ]),
+                  )),
                 ]),
-              ),
-              const SizedBox(height: 12),
-            ],
-
-            // ── Special instructions ──────────────────────────────
-            _SectionCard(
-              title: '📝 Special Instructions', subtitle: 'Optional',
-              child: TextFormField(
-                controller: _instructionsCtrl, maxLines: 2,
-                decoration: const InputDecoration(
-                  hintText: 'E.g. Extra spicy, no onions...',
-                  contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                ),
-              ),
+              ]),
             ),
             const SizedBox(height: 12),
+          ],
 
-            // ── Coins redemption ─────────────────────────────────
-            if (coinBalance > 0)
-              _SectionCard(
-                title: '🪙 Loyalty Coins',
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Row(children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                      decoration: BoxDecoration(
-                        color: const Color(AppColors.coins).withOpacity(0.12),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text('$coinBalance coins available',
-                        style: const TextStyle(fontWeight: FontWeight.w700, color: Color(AppColors.coins), fontSize: 13)),
-                    ),
-                    const Spacer(),
-                    Switch(
-                      value: _useCoins,
-                      activeColor: const Color(AppColors.coins),
-                      onChanged: (val) {
-                        setState(() => _useCoins = val);
-                        if (val) {
-                          // Redeem up to total
-                          final maxRedeem = coinBalance.clamp(0, cart.total.floor());
-                          cart.setCoinsToRedeem(maxRedeem);
-                        } else {
-                          cart.setCoinsToRedeem(0);
-                        }
-                      },
-                    ),
-                  ]),
-                  if (_useCoins) ...[
-                    const SizedBox(height: 6),
+          // ── Special Instructions ─────────────────────────────────────
+          _SectionCard(
+            icon: Icons.notes_rounded,
+            title: 'Special Instructions',
+            subtitle: 'Optional',
+            child: TextFormField(
+              controller: _instructionsCtrl,
+              maxLines: 2,
+              decoration: const InputDecoration(
+                hintText: 'Extra spicy, no onions...',
+                contentPadding:
+                    EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // ── Loyalty Coins ────────────────────────────────────────────
+          _CoinRedemptionCard(
+            coinBalance: coinBalance,
+            useCoins: _useCoins,
+            coinsToRedeem: cart.coinsToRedeem,
+            finalTotal: finalTotal,
+            onToggle: (val) => _toggleCoins(val, cart, coinBalance),
+          ),
+          const SizedBox(height: 12),
+
+          // ── Payment Method ───────────────────────────────────────────
+          _SectionCard(
+            icon: Icons.payment_rounded,
+            title: 'Payment Method',
+            child: Column(children: [
+              _PaymentOption(
+                value: 'cash_on_delivery',
+                selected: _paymentMethod,
+                title: 'Cash on Delivery',
+                subtitle: 'Pay when your order arrives',
+                icon: Icons.money_rounded,
+                onTap: () =>
+                    setState(() => _paymentMethod = 'cash_on_delivery'),
+              ),
+              const SizedBox(height: 8),
+              _PaymentOption(
+                value: 'online',
+                selected: _paymentMethod,
+                title: 'Online Payment',
+                subtitle: 'UPI, Card, Net Banking',
+                icon: Icons.account_balance_wallet_rounded,
+                onTap: () => setState(() => _paymentMethod = 'online'),
+              ),
+            ]),
+          ),
+          const SizedBox(height: 12),
+
+          // ── Bill Summary ─────────────────────────────────────────────
+          _BillSummaryCard(
+            cart: cart,
+            useCoins: _useCoins,
+            coinsOff: coinsOff,
+            finalTotal: finalTotal,
+          ),
+          const SizedBox(height: 24),
+        ],
+      ),
+
+      // ── Sticky Place Order Button ────────────────────────────────────
+      bottomNavigationBar: _PlaceOrderBar(
+        finalTotal: finalTotal,
+        paymentMethod: _paymentMethod,
+        placing: _placingOrder,
+        onTap: _placeOrder,
+      ),
+    );
+  }
+}
+
+// ─── COIN REDEMPTION CARD ─────────────────────────────────────────────────────
+class _CoinRedemptionCard extends StatelessWidget {
+  final int coinBalance, coinsToRedeem;
+  final bool useCoins;
+  final double finalTotal;
+  final ValueChanged<bool> onToggle;
+
+  const _CoinRedemptionCard({
+    required this.coinBalance,
+    required this.useCoins,
+    required this.coinsToRedeem,
+    required this.finalTotal,
+    required this.onToggle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final canRedeem = coinBalance > 0;
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: useCoins
+              ? const Color(AppColors.coins).withValues(alpha: 0.6)
+              : Colors.grey.shade100,
+          width: useCoins ? 1.5 : 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 8,
+              offset: const Offset(0, 2))
+        ],
+      ),
+      child: Column(
+        children: [
+          // Header
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
+            child: Row(children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: const Color(AppColors.coins).withValues(alpha: 0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.monetization_on_rounded,
+                    color: Color(AppColors.coins), size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                    const Text('Loyalty Coins',
+                        style: TextStyle(
+                            fontWeight: FontWeight.w800, fontSize: 14)),
                     Text(
-                      'Using ${cart.coinsToRedeem} coins = ₹${cart.coinsToRedeem} off',
-                      style: const TextStyle(color: Color(AppColors.success), fontWeight: FontWeight.w600, fontSize: 13),
+                      canRedeem
+                          ? 'You have $coinBalance coins = ₹$coinBalance'
+                          : 'No coins yet — earn 1 coin per ₹10 spent',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight:
+                            canRedeem ? FontWeight.w600 : FontWeight.w400,
+                        color: canRedeem
+                            ? const Color(AppColors.coins)
+                            : Colors.grey.shade500,
+                      ),
                     ),
-                    Text('1 coin = ₹1  •  Earn 1 coin per ₹10 spent',
-                      style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
-                  ] else
-                    Text('Use coins for instant discount (1 coin = ₹1)',
-                      style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
-                ]),
+                  ])),
+              Switch(
+                value: useCoins && canRedeem,
+                activeThumbColor: const Color(AppColors.coins),
+                onChanged: canRedeem ? onToggle : null,
               ),
-            if (coinBalance > 0) const SizedBox(height: 12),
+            ]),
+          ),
 
-            // ── Payment method ────────────────────────────────────
-            _SectionCard(
-              title: '💳 Payment Method',
-              child: Column(children: [
-                _PaymentOption(
-                  value: 'cash_on_delivery', selected: _paymentMethod,
-                  title: '💵 Cash on Delivery', subtitle: 'Pay when delivered',
-                  onTap: () => setState(() => _paymentMethod = 'cash_on_delivery'),
-                ),
-                const SizedBox(height: 4),
-                _PaymentOption(
-                  value: 'online', selected: _paymentMethod,
-                  title: '🏦 Online Payment', subtitle: 'UPI, Card, Net Banking',
-                  onTap: () => setState(() => _paymentMethod = 'online'),
-                ),
-              ]),
-            ),
-            const SizedBox(height: 12),
-
-            // ── Order summary ─────────────────────────────────────
-            _SectionCard(
-              title: '🧾 Order Summary',
-              child: Column(children: [
-                _SummaryRow(label: 'Subtotal (${cart.itemCount} items)', amount: cart.subtotal),
-                const SizedBox(height: 8),
-                if (cart.discount > 0) ...[
-                  _SummaryRow(label: 'Coupon Discount', amount: -cart.discount, color: const Color(AppColors.success)),
-                  const SizedBox(height: 8),
-                ],
-                if (_useCoins && cart.coinsToRedeem > 0) ...[
-                  _SummaryRow(label: '🪙 Coins Redeemed (${cart.coinsToRedeem})', amount: -coinsDiscount, color: const Color(AppColors.coins)),
-                  const SizedBox(height: 8),
-                ],
-                _SummaryRow(
-                  label: _deliveryType == 'pickup' ? 'Pickup (free)' : 'Delivery Fee',
-                  amount: cart.deliveryFee,
-                  note: _deliveryType == 'delivery' && cart.subtotal >= 300 ? 'Free!' : null,
-                ),
-                const SizedBox(height: 8),
-                _SummaryRow(label: 'Tax (5%)', amount: cart.tax),
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 10),
-                  child: Divider(color: Colors.grey.shade200, height: 1),
-                ),
-                _SummaryRow(label: 'Total', amount: cart.total, isBold: true, fontSize: 16),
-              ]),
-            ),
-            const SizedBox(height: 24),
-
-            // ── Place order ───────────────────────────────────────
-            SizedBox(
-              height: 54,
-              child: ElevatedButton(
-                onPressed: _placingOrder ? null : _placeOrder,
-                style: ElevatedButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
-                child: Text(
-                  _paymentMethod == 'cash_on_delivery'
-                    ? 'Place Order  •  ₹${cart.total.toStringAsFixed(0)}'
-                    : 'Pay  ₹${cart.total.toStringAsFixed(0)}',
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
-                ),
+          // Expanded detail
+          if (useCoins && coinsToRedeem > 0) ...[
+            Container(
+              margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: const Color(AppColors.coins).withValues(alpha: 0.07),
+                borderRadius: BorderRadius.circular(10),
               ),
+              child: Column(children: [
+                Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(children: [
+                        const Icon(Icons.check_circle_rounded,
+                            color: Color(AppColors.coins), size: 16),
+                        const SizedBox(width: 8),
+                        Text('Redeeming $coinsToRedeem coins',
+                            style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                                color: Color(AppColors.coins),
+                                fontSize: 13)),
+                      ]),
+                      Text('- ₹$coinsToRedeem',
+                          style: const TextStyle(
+                              fontWeight: FontWeight.w800,
+                              color: Color(AppColors.coins),
+                              fontSize: 14)),
+                    ]),
+                const SizedBox(height: 10),
+                Divider(
+                    color: const Color(AppColors.coins).withValues(alpha: 0.2),
+                    height: 1),
+                const SizedBox(height: 10),
+                Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('You pay',
+                          style: TextStyle(
+                              fontWeight: FontWeight.w700, fontSize: 14)),
+                      Text('₹${finalTotal.toStringAsFixed(0)}',
+                          style: const TextStyle(
+                              fontWeight: FontWeight.w900,
+                              fontSize: 22,
+                              color: Color(AppColors.primary))),
+                    ]),
+              ]),
             ),
           ],
+
+          // Info row
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+            child: Row(children: [
+              const Icon(Icons.info_outline_rounded,
+                  size: 13, color: Colors.grey),
+              const SizedBox(width: 5),
+              Text('1 coin = ₹1  |  Earn 1 coin per ₹10 spent',
+                  style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
+            ]),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── BILL SUMMARY ─────────────────────────────────────────────────────────────
+class _BillSummaryCard extends StatelessWidget {
+  final CartProvider cart;
+  final bool useCoins;
+  final double coinsOff, finalTotal;
+  const _BillSummaryCard(
+      {required this.cart,
+      required this.useCoins,
+      required this.coinsOff,
+      required this.finalTotal});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 8,
+              offset: const Offset(0, 2))
+        ],
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Row(children: [
+          Icon(Icons.receipt_long_rounded,
+              size: 18, color: Color(AppColors.primary)),
+          SizedBox(width: 8),
+          Text('Order Summary',
+              style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
+        ]),
+        const SizedBox(height: 14),
+        _SummaryRow(
+            label:
+                'Subtotal (${cart.itemCount} item${cart.itemCount > 1 ? 's' : ''})',
+            amount: cart.subtotal),
+        if (cart.discount > 0) ...[
+          const SizedBox(height: 8),
+          _SummaryRow(
+              label: 'Coupon (${cart.couponCode ?? ''})',
+              amount: -cart.discount,
+              color: const Color(AppColors.success)),
+        ],
+        const SizedBox(height: 8),
+        _SummaryRow(
+          label: cart.deliveryType == 'pickup'
+              ? 'Pickup (Free)'
+              : cart.deliveryFee == 0
+                  ? 'Delivery (Free above ₹300)'
+                  : 'Delivery Fee',
+          amount: cart.deliveryFee,
+          color: cart.deliveryFee == 0 ? const Color(AppColors.success) : null,
+        ),
+        if (useCoins && coinsOff > 0) ...[
+          const SizedBox(height: 8),
+          _SummaryRow(
+              label: 'Coins Redeemed (${cart.coinsToRedeem})',
+              amount: -coinsOff,
+              color: const Color(AppColors.coins)),
+        ],
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Divider(color: Colors.grey.shade100, thickness: 1.5),
+        ),
+        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+          const Text('Total Payable',
+              style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
+          Text('₹${finalTotal.toStringAsFixed(0)}',
+              style: const TextStyle(
+                  fontWeight: FontWeight.w900,
+                  fontSize: 22,
+                  color: Color(AppColors.primary))),
+        ]),
+        if (cart.discount > 0 || coinsOff > 0) ...[
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: const Color(AppColors.success).withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(children: [
+              const Icon(Icons.celebration_rounded,
+                  color: Color(AppColors.success), size: 15),
+              const SizedBox(width: 6),
+              Text(
+                  "Saving ₹${(cart.discount + coinsOff).toStringAsFixed(0)} on this order!",
+                  style: const TextStyle(
+                      color: Color(AppColors.success),
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12)),
+            ]),
+          ),
+        ],
+      ]),
+    );
+  }
+}
+
+// ─── PLACE ORDER BAR ──────────────────────────────────────────────────────────
+class _PlaceOrderBar extends StatelessWidget {
+  final double finalTotal;
+  final String paymentMethod;
+  final bool placing;
+  final VoidCallback onTap;
+  const _PlaceOrderBar(
+      {required this.finalTotal,
+      required this.paymentMethod,
+      required this.placing,
+      required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomPad = MediaQuery.of(context).padding.bottom;
+    return Container(
+      padding: EdgeInsets.fromLTRB(16, 12, 16, 12 + bottomPad),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withValues(alpha: 0.08),
+              blurRadius: 16,
+              offset: const Offset(0, -4))
+        ],
+      ),
+      child: SizedBox(
+        height: 54,
+        child: ElevatedButton(
+          onPressed: placing ? null : onTap,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(AppColors.primary),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          ),
+          child: placing
+              ? const SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(
+                      color: Colors.white, strokeWidth: 2.5))
+              : Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                  Icon(
+                      paymentMethod == 'cash_on_delivery'
+                          ? Icons.shopping_bag_rounded
+                          : Icons.lock_rounded,
+                      color: Colors.white,
+                      size: 18),
+                  const SizedBox(width: 10),
+                  Text(
+                      paymentMethod == 'cash_on_delivery'
+                          ? 'Place Order'
+                          : 'Pay Now',
+                      style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white)),
+                  const SizedBox(width: 12),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.22),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text('₹${finalTotal.toStringAsFixed(0)}',
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 15)),
+                  ),
+                ]),
         ),
       ),
     );
   }
 }
 
+// ─── SECTION CARD ─────────────────────────────────────────────────────────────
 class _SectionCard extends StatelessWidget {
+  final IconData icon;
   final String title;
   final String? subtitle;
   final Widget child;
-  const _SectionCard({required this.title, this.subtitle, required this.child});
+  const _SectionCard(
+      {required this.icon,
+      required this.title,
+      this.subtitle,
+      required this.child});
 
   @override
   Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.all(16),
-    decoration: BoxDecoration(
-      color: Colors.white, borderRadius: BorderRadius.circular(14),
-      boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 2))],
-    ),
-    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Row(children: [
-        Text(title, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14)),
-        if (subtitle != null) ...[
-          const SizedBox(width: 6),
-          Text(subtitle!, style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
-        ],
-      ]),
-      const SizedBox(height: 12),
-      child,
-    ]),
-  );
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: [
+            BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 8,
+                offset: const Offset(0, 2))
+          ],
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Icon(icon, size: 17, color: const Color(AppColors.primary)),
+            const SizedBox(width: 8),
+            Text(title,
+                style:
+                    const TextStyle(fontWeight: FontWeight.w800, fontSize: 14)),
+            if (subtitle != null) ...[
+              const SizedBox(width: 6),
+              Text(subtitle!,
+                  style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
+            ],
+          ]),
+          const SizedBox(height: 12),
+          child,
+        ]),
+      );
 }
 
+// ─── TYPE BUTTON ──────────────────────────────────────────────────────────────
 class _TypeButton extends StatelessWidget {
   final String label;
+  final IconData icon;
   final bool selected;
   final VoidCallback onTap;
-  const _TypeButton({required this.label, required this.selected, required this.onTap});
+  const _TypeButton(
+      {required this.label,
+      required this.icon,
+      required this.selected,
+      required this.onTap});
 
   @override
   Widget build(BuildContext context) => GestureDetector(
-    onTap: onTap,
-    child: AnimatedContainer(
-      duration: const Duration(milliseconds: 150),
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      decoration: BoxDecoration(
-        color: selected ? const Color(AppColors.primary) : Colors.grey.shade100,
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Center(child: Text(label, style: TextStyle(
-        fontWeight: FontWeight.w700, fontSize: 13,
-        color: selected ? Colors.white : const Color(AppColors.textPrimary),
-      ))),
-    ),
-  );
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(
+            color: selected
+                ? const Color(AppColors.primary)
+                : Colors.grey.shade100,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+                color: selected
+                    ? const Color(AppColors.primary)
+                    : Colors.grey.shade200),
+          ),
+          child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+            Icon(icon,
+                size: 16,
+                color: selected
+                    ? Colors.white
+                    : const Color(AppColors.textSecondary)),
+            const SizedBox(width: 6),
+            Text(label,
+                style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                    color: selected
+                        ? Colors.white
+                        : const Color(AppColors.textPrimary))),
+          ]),
+        ),
+      );
 }
 
+// ─── PAYMENT OPTION ───────────────────────────────────────────────────────────
 class _PaymentOption extends StatelessWidget {
   final String value, selected, title, subtitle;
+  final IconData icon;
   final VoidCallback onTap;
-  const _PaymentOption({required this.value, required this.selected, required this.title, required this.subtitle, required this.onTap});
+  const _PaymentOption(
+      {required this.value,
+      required this.selected,
+      required this.title,
+      required this.subtitle,
+      required this.icon,
+      required this.onTap});
 
   @override
   Widget build(BuildContext context) {
     final isSelected = value == selected;
     return GestureDetector(
       onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
         decoration: BoxDecoration(
-          color: isSelected ? const Color(AppColors.primary).withOpacity(0.05) : Colors.grey.shade50,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: isSelected ? const Color(AppColors.primary) : Colors.grey.shade200, width: isSelected ? 1.5 : 1),
+          color: isSelected
+              ? const Color(AppColors.primary).withValues(alpha: 0.06)
+              : Colors.grey.shade50,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+              color: isSelected
+                  ? const Color(AppColors.primary)
+                  : Colors.grey.shade200,
+              width: isSelected ? 1.5 : 1),
         ),
         child: Row(children: [
-          Radio<String>(value: value, groupValue: selected, onChanged: (_) => onTap(),
-            activeColor: const Color(AppColors.primary),
-            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            visualDensity: VisualDensity.compact),
-          const SizedBox(width: 6),
-          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(title, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
-            Text(subtitle, style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
-          ]),
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: isSelected
+                  ? const Color(AppColors.primary).withValues(alpha: 0.1)
+                  : Colors.grey.shade100,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon,
+                size: 18,
+                color: isSelected
+                    ? const Color(AppColors.primary)
+                    : Colors.grey.shade500),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                Text(title,
+                    style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                        color: isSelected
+                            ? const Color(AppColors.primary)
+                            : const Color(AppColors.textPrimary))),
+                Text(subtitle,
+                    style:
+                        TextStyle(fontSize: 11, color: Colors.grey.shade500)),
+              ])),
+          if (isSelected)
+            const Icon(Icons.check_circle_rounded,
+                color: Color(AppColors.primary), size: 20),
         ]),
       ),
     );
   }
 }
 
+// ─── SUMMARY ROW ──────────────────────────────────────────────────────────────
 class _SummaryRow extends StatelessWidget {
   final String label;
   final double amount;
   final Color? color;
-  final bool isBold;
-  final double fontSize;
-  final String? note;
-  const _SummaryRow({required this.label, required this.amount, this.color, this.isBold = false, this.fontSize = 13, this.note});
+  const _SummaryRow({required this.label, required this.amount, this.color});
 
   @override
   Widget build(BuildContext context) {
-    final c = color ?? (amount < 0 ? const Color(AppColors.success) : const Color(AppColors.textPrimary));
-    return Row(children: [
-      Expanded(child: Text(label, style: TextStyle(
-        fontSize: fontSize, fontWeight: isBold ? FontWeight.w800 : FontWeight.w500,
-        color: isBold ? const Color(AppColors.textPrimary) : Colors.grey.shade700))),
-      if (note != null) ...[
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-          decoration: BoxDecoration(color: const Color(AppColors.success).withOpacity(0.1), borderRadius: BorderRadius.circular(4)),
-          child: Text(note!, style: const TextStyle(color: Color(AppColors.success), fontSize: 10, fontWeight: FontWeight.w700)),
-        ),
-        const SizedBox(width: 8),
-      ],
+    final c = color ??
+        (amount < 0
+            ? const Color(AppColors.success)
+            : const Color(AppColors.textPrimary));
+    return Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+      Expanded(
+          child: Text(label,
+              style: TextStyle(
+                  fontSize: 13,
+                  color: Colors.grey.shade600,
+                  fontWeight: FontWeight.w500))),
       Text(
-        amount == 0 ? '₹0' : '${amount < 0 ? "-" : ""}₹${amount.abs().toStringAsFixed(0)}',
-        style: TextStyle(fontSize: fontSize, fontWeight: isBold ? FontWeight.w800 : FontWeight.w600, color: c),
+        amount == 0
+            ? 'Free'
+            : '${amount < 0 ? "-" : ""}₹${amount.abs().toStringAsFixed(0)}',
+        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: c),
       ),
     ]);
   }

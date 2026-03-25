@@ -1,5 +1,6 @@
 class AppConfig {
-  static const String baseUrl = 'http://13.232.73.121/api';
+  static const String baseUrl = 'https://api.gobt.in/api';
+  static const String imageBaseUrl = 'https://api.gobt.in';  // for /uploads/... paths
   static const String appName = 'PizzaHap';
   static const Duration connectTimeout = Duration(seconds: 30);
   static const Duration receiveTimeout = Duration(seconds: 30);
@@ -22,7 +23,7 @@ class AppColors {
   static const error = 0xFFE74C3C;
   static const vegGreen = 0xFF27AE60;
   static const nonVegRed = 0xFFCC1F1F;
-  static const coins = 0xFFFFB300; // amber for coins
+  static const coins = 0xFFFFB300;
 }
 
 class AppStrings {

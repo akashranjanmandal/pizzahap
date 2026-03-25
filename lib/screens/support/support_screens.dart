@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -49,67 +48,87 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           ? const Center(
               child: CircularProgressIndicator(color: Color(AppColors.primary)))
           : prov.notifications.isEmpty
-              ? const EmptyState(emoji: '🔔', title: 'No notifications yet')
+              ? const EmptyState(
+                  icon: Icons.notifications_none_rounded,
+                  title: 'No notifications yet')
               : ListView.separated(
                   padding: const EdgeInsets.all(16),
                   itemCount: prov.notifications.length,
                   separatorBuilder: (_, __) => const SizedBox(height: 8),
                   itemBuilder: (ctx, i) {
                     final n = prov.notifications[i];
-                    return Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: n.isRead
-                            ? Colors.white
-                            : const Color(AppColors.primary).withOpacity(0.05),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
+                    return GestureDetector(
+                      onTap: () {
+                        if (!n.isRead) {
+                          ApiService.markNotificationRead(n.id).then((_) {
+                            prov.load();
+                          }).catchError((_) {});
+                        }
+                        if (n.orderId != null) {
+                          Navigator.pushNamed(context, '/order-detail', arguments: n.orderId);
+                        } else if (n.type == 'order') {
+                          // Try to extract order ID from notification message or payload if possible.
+                          // However, we rely on the backend now. 
+                        }
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
                           color: n.isRead
-                              ? Colors.grey.shade100
-                              : const Color(AppColors.primary).withOpacity(0.2),
+                              ? Colors.white
+                              : const Color(AppColors.primary).withValues(alpha: 0.05),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: n.isRead
+                                ? Colors.grey.shade100
+                                : const Color(AppColors.primary).withValues(alpha: 0.2),
+                          ),
                         ),
-                      ),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Container(
-                            width: 36, height: 36,
-                            decoration: BoxDecoration(
-                              color: const Color(AppColors.primary).withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: Center(
-                                child: Text(_notifEmoji(n.type),
-                                    style: const TextStyle(fontSize: 18))),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(n.title,
-                                    style: TextStyle(
-                                        fontWeight: n.isRead
-                                            ? FontWeight.w600
-                                            : FontWeight.w800,
-                                        fontSize: 14)),
-                                const SizedBox(height: 3),
-                                Text(n.message,
-                                    style: TextStyle(
-                                        fontSize: 13,
-                                        color: Colors.grey.shade600,
-                                        height: 1.4)),
-                              ],
-                            ),
-                          ),
-                          if (!n.isRead)
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
                             Container(
-                                width: 8,
-                                height: 8,
-                                decoration: const BoxDecoration(
-                                    color: Color(AppColors.primary),
-                                    shape: BoxShape.circle)),
-                        ],
+                              width: 36,
+                              height: 36,
+                              decoration: BoxDecoration(
+                                color: const Color(AppColors.primary)
+                                    .withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Center(
+                                  child: Icon(_notifTypeIcon(n.type),
+                                      size: 18,
+                                      color: const Color(AppColors.primary))),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(n.title,
+                                      style: TextStyle(
+                                          fontWeight: n.isRead
+                                              ? FontWeight.w600
+                                              : FontWeight.w800,
+                                          fontSize: 14)),
+                                  const SizedBox(height: 3),
+                                  Text(n.message,
+                                      style: TextStyle(
+                                          fontSize: 13,
+                                          color: Colors.grey.shade600,
+                                          height: 1.4)),
+                                ],
+                              ),
+                            ),
+                            if (!n.isRead)
+                              Container(
+                                  width: 8,
+                                  height: 8,
+                                  decoration: const BoxDecoration(
+                                      color: Color(AppColors.primary),
+                                      shape: BoxShape.circle)),
+                          ],
+                        ),
                       ),
                     );
                   },
@@ -117,16 +136,21 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     );
   }
 
-  String _notifEmoji(String? type) {
+  IconData _notifTypeIcon(String? type) {
     switch (type) {
-      case 'order':   return '📦';
-      case 'payment': return '💳';
-      case 'promo':   return '🎫';
-      case 'refund':  return '↩️';
-      case 'coins':   return '🪙';
-      default:        return '🔔';
+      case 'order':
+        return Icons.receipt_long_rounded;
+      case 'payment':
+        return Icons.payment_rounded;
+      case 'promo':
+        return Icons.local_offer_rounded;
+      case 'refund':
+        return Icons.assignment_return_rounded;
+      case 'coins':
+        return Icons.monetization_on_rounded;
+      default:
+        return Icons.notifications_rounded;
     }
-  }
   }
 }
 
@@ -163,11 +187,11 @@ class _CouponsScreenState extends State<CouponsScreen> {
         appBar: AppBar(title: const Text('Available Coupons')),
         body: _loading
             ? const Center(
-                child: CircularProgressIndicator(
-                    color: Color(AppColors.primary)))
+                child:
+                    CircularProgressIndicator(color: Color(AppColors.primary)))
             : _coupons.isEmpty
                 ? const EmptyState(
-                    emoji: '🎫',
+                    icon: Icons.local_offer_outlined,
                     title: 'No active coupons',
                     subtitle: 'Check back later for offers!')
                 : ListView.separated(
@@ -189,7 +213,7 @@ class _CouponCard extends StatelessWidget {
     // Navigate to cart with the coupon pre-filled
     Navigator.pushNamed(context, '/cart',
         arguments: {'autoCoupon': coupon.code});
-    showSnack(context, '✅ Code "${coupon.code}" copied & applied to cart!');
+    AppToast.success(context, 'Coupon applied to cart!');
   }
 
   @override
@@ -198,8 +222,7 @@ class _CouponCard extends StatelessWidget {
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
-            BoxShadow(
-                color: Colors.black.withOpacity(0.05), blurRadius: 10)
+            BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10)
           ],
         ),
         child: IntrinsicHeight(
@@ -218,8 +241,7 @@ class _CouponCard extends StatelessWidget {
                 ),
               ),
               // Dashed separator
-              Container(
-                  width: 1, color: Colors.grey.shade200),
+              Container(width: 1, color: Colors.grey.shade200),
               // Content
               Expanded(
                 child: Padding(
@@ -234,7 +256,7 @@ class _CouponCard extends StatelessWidget {
                             onTap: () {
                               Clipboard.setData(
                                   ClipboardData(text: coupon.code));
-                              showSnack(context,
+                              AppToast.success(context,
                                   '"${coupon.code}" copied to clipboard!');
                             },
                             child: Container(
@@ -242,11 +264,11 @@ class _CouponCard extends StatelessWidget {
                                   horizontal: 10, vertical: 5),
                               decoration: BoxDecoration(
                                 color: const Color(AppColors.primary)
-                                    .withOpacity(0.1),
+                                    .withValues(alpha: 0.1),
                                 borderRadius: BorderRadius.circular(6),
                                 border: Border.all(
                                   color: const Color(AppColors.primary)
-                                      .withOpacity(0.3),
+                                      .withValues(alpha: 0.3),
                                 ),
                               ),
                               child: Row(
@@ -256,12 +278,10 @@ class _CouponCard extends StatelessWidget {
                                         style: const TextStyle(
                                             fontWeight: FontWeight.w800,
                                             fontSize: 14,
-                                            color:
-                                                Color(AppColors.primary),
+                                            color: Color(AppColors.primary),
                                             letterSpacing: 0.5)),
                                     const SizedBox(width: 6),
-                                    const Icon(
-                                        Icons.copy_rounded,
+                                    const Icon(Icons.copy_rounded,
                                         size: 13,
                                         color: Color(AppColors.primary)),
                                   ]),
@@ -274,7 +294,7 @@ class _CouponCard extends StatelessWidget {
                                 horizontal: 10, vertical: 5),
                             decoration: BoxDecoration(
                               color: const Color(AppColors.success)
-                                  .withOpacity(0.1),
+                                  .withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(20),
                             ),
                             child: Text(coupon.displayDiscount,
@@ -289,8 +309,7 @@ class _CouponCard extends StatelessWidget {
                         const SizedBox(height: 6),
                         Text(coupon.description!,
                             style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey.shade600)),
+                                fontSize: 12, color: Colors.grey.shade600)),
                       ],
                       const SizedBox(height: 6),
                       Row(children: [
@@ -300,8 +319,7 @@ class _CouponCard extends StatelessWidget {
                         Text(
                             'Min. order ₹${coupon.minOrderValue.toStringAsFixed(0)}',
                             style: TextStyle(
-                                fontSize: 11,
-                                color: Colors.grey.shade500)),
+                                fontSize: 11, color: Colors.grey.shade500)),
                       ]),
                       const SizedBox(height: 10),
                       // Apply to cart button
@@ -310,16 +328,14 @@ class _CouponCard extends StatelessWidget {
                         height: 36,
                         child: ElevatedButton.icon(
                           onPressed: () => _copyAndUse(context),
-                          icon: const Icon(Icons.shopping_cart_rounded,
-                              size: 14),
+                          icon:
+                              const Icon(Icons.shopping_cart_rounded, size: 14),
                           label: const Text('Apply to Cart',
                               style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w700)),
+                                  fontSize: 12, fontWeight: FontWeight.w700)),
                           style: ElevatedButton.styleFrom(
                             minimumSize: Size.zero,
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 14),
+                            padding: const EdgeInsets.symmetric(horizontal: 14),
                           ),
                         ),
                       ),
@@ -372,14 +388,10 @@ class _SupportScreenState extends State<SupportScreen> {
         builder: (ctx, setModalState) => Container(
           decoration: const BoxDecoration(
             color: Colors.white,
-            borderRadius:
-                BorderRadius.vertical(top: Radius.circular(24)),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
           ),
           padding: EdgeInsets.fromLTRB(
-              20,
-              20,
-              20,
-              MediaQuery.of(ctx).viewInsets.bottom + 20),
+              20, 20, 20, MediaQuery.of(ctx).viewInsets.bottom + 20),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -395,16 +407,13 @@ class _SupportScreenState extends State<SupportScreen> {
                 ),
               ),
               const Text('New Support Ticket',
-                  style: TextStyle(
-                      fontSize: 18, fontWeight: FontWeight.w800)),
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
               const SizedBox(height: 16),
               const Text('Category',
-                  style: TextStyle(
-                      fontWeight: FontWeight.w700, fontSize: 13)),
+                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
               const SizedBox(height: 8),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 14),
+                padding: const EdgeInsets.symmetric(horizontal: 14),
                 decoration: BoxDecoration(
                   border: Border.all(color: Colors.grey.shade200),
                   borderRadius: BorderRadius.circular(12),
@@ -423,29 +432,23 @@ class _SupportScreenState extends State<SupportScreen> {
                     ]
                         .map((c) => DropdownMenuItem(
                             value: c,
-                            child: Text(c
-                                .replaceAll('_', ' ')
-                                .toUpperCase(),
+                            child: Text(c.replaceAll('_', ' ').toUpperCase(),
                                 style: const TextStyle(fontSize: 14))))
                         .toList(),
-                    onChanged: (v) =>
-                        setModalState(() => category = v!),
+                    onChanged: (v) => setModalState(() => category = v!),
                   ),
                 ),
               ),
               const SizedBox(height: 12),
               const Text('Subject',
-                  style: TextStyle(
-                      fontWeight: FontWeight.w700, fontSize: 13)),
+                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
               const SizedBox(height: 8),
               TextFormField(
                   controller: subjectCtrl,
-                  decoration: const InputDecoration(
-                      hintText: 'Brief subject')),
+                  decoration: const InputDecoration(hintText: 'Brief subject')),
               const SizedBox(height: 12),
               const Text('Message',
-                  style: TextStyle(
-                      fontWeight: FontWeight.w700, fontSize: 13)),
+                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
               const SizedBox(height: 8),
               TextFormField(
                   controller: messageCtrl,
@@ -455,8 +458,9 @@ class _SupportScreenState extends State<SupportScreen> {
               const SizedBox(height: 20),
               ElevatedButton(
                 onPressed: () async {
-                  if (subjectCtrl.text.isEmpty ||
-                      messageCtrl.text.isEmpty) return;
+                  if (subjectCtrl.text.isEmpty || messageCtrl.text.isEmpty) {
+                    return;
+                  }
                   Navigator.pop(ctx);
                   try {
                     await ApiService.createTicket({
@@ -465,11 +469,11 @@ class _SupportScreenState extends State<SupportScreen> {
                       'category': category,
                     });
                     if (!mounted) return;
-                    showSnack(context, '✅ Support ticket created!');
+                    AppToast.success(context, 'Support ticket created!');
                     _load();
                   } on ApiException catch (e) {
                     if (!mounted) return;
-                    showSnack(context, e.message, isError: true);
+                    AppToast.error(context, e.message);
                   }
                 },
                 child: const Text('Submit Ticket'),
@@ -490,16 +494,16 @@ class _SupportScreenState extends State<SupportScreen> {
           backgroundColor: const Color(AppColors.primary),
           icon: const Icon(Icons.add, color: Colors.white),
           label: const Text('New Ticket',
-              style: TextStyle(
-                  color: Colors.white, fontWeight: FontWeight.w700)),
+              style:
+                  TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
         ),
         body: _loading
             ? const Center(
-                child: CircularProgressIndicator(
-                    color: Color(AppColors.primary)))
+                child:
+                    CircularProgressIndicator(color: Color(AppColors.primary)))
             : _tickets.isEmpty
                 ? EmptyState(
-                    emoji: '🆘',
+                    icon: Icons.headset_mic_outlined,
                     title: 'No support tickets',
                     subtitle:
                         "Need help? Create a ticket and we'll respond shortly.",
@@ -524,7 +528,7 @@ class _SupportScreenState extends State<SupportScreen> {
                             borderRadius: BorderRadius.circular(12),
                             boxShadow: [
                               BoxShadow(
-                                  color: Colors.black.withOpacity(0.04),
+                                  color: Colors.black.withValues(alpha: 0.04),
                                   blurRadius: 8)
                             ],
                           ),
@@ -534,17 +538,16 @@ class _SupportScreenState extends State<SupportScreen> {
                                 padding: const EdgeInsets.all(8),
                                 decoration: BoxDecoration(
                                   color: const Color(AppColors.primary)
-                                      .withOpacity(0.1),
+                                      .withValues(alpha: 0.1),
                                   borderRadius: BorderRadius.circular(10),
                                 ),
-                                child: const Text('🎫',
-                                    style: TextStyle(fontSize: 20)),
+                                child: const Icon(Icons.local_offer_rounded,
+                                    color: Color(AppColors.primary), size: 20),
                               ),
                               const SizedBox(width: 12),
                               Expanded(
                                 child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.start,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(t.subject,
                                         style: const TextStyle(
@@ -590,7 +593,7 @@ class _SupportScreenState extends State<SupportScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-          color: color.withOpacity(0.1),
+          color: color.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(20)),
       child: Text(status.replaceAll('_', ' '),
           style: TextStyle(
@@ -633,7 +636,12 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
   Future<void> _load() async {
     try {
       final t = await ApiService.getTicket(widget.ticketId);
-      if (mounted) setState(() { _ticket = t; _loading = false; });
+      if (mounted) {
+        setState(() {
+          _ticket = t;
+          _loading = false;
+        });
+      }
       // scroll to bottom after messages load
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (_scrollCtrl.hasClients) {
@@ -649,13 +657,12 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
     if (_replyCtrl.text.trim().isEmpty) return;
     setState(() => _replying = true);
     try {
-      await ApiService.replyToTicket(
-          widget.ticketId, _replyCtrl.text.trim());
+      await ApiService.replyToTicket(widget.ticketId, _replyCtrl.text.trim());
       _replyCtrl.clear();
       await _load();
     } on ApiException catch (e) {
       if (!mounted) return;
-      showSnack(context, e.message, isError: true);
+      AppToast.error(context, e.message);
     } finally {
       if (mounted) setState(() => _replying = false);
     }
@@ -666,12 +673,11 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
     if (_loading) {
       return const Scaffold(
           body: Center(
-              child: CircularProgressIndicator(
-                  color: Color(AppColors.primary))));
+              child:
+                  CircularProgressIndicator(color: Color(AppColors.primary))));
     }
     if (_ticket == null) {
-      return const Scaffold(
-          body: Center(child: Text('Ticket not found')));
+      return const Scaffold(body: Center(child: Text('Ticket not found')));
     }
     final t = _ticket!;
 
@@ -680,17 +686,19 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
       appBar: AppBar(
         title: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(t.ticketNumber,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+              style:
+                  const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
           Text(t.subject,
               style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
-              maxLines: 1, overflow: TextOverflow.ellipsis),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis),
         ]),
         actions: [
           Container(
             margin: const EdgeInsets.only(right: 16, top: 10, bottom: 10),
             padding: const EdgeInsets.symmetric(horizontal: 10),
             decoration: BoxDecoration(
-              color: _statusColor(t.status).withOpacity(0.12),
+              color: _statusColor(t.status).withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(20),
             ),
             child: Center(
@@ -722,7 +730,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
                 color: Colors.white,
                 boxShadow: [
                   BoxShadow(
-                      color: Colors.black.withOpacity(0.06),
+                      color: Colors.black.withValues(alpha: 0.06),
                       blurRadius: 8,
                       offset: const Offset(0, -2))
                 ],
@@ -735,8 +743,8 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
                       decoration: const InputDecoration(
                         hintText: 'Write a reply...',
                         isDense: true,
-                        contentPadding: EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 11),
+                        contentPadding:
+                            EdgeInsets.symmetric(horizontal: 14, vertical: 11),
                       ),
                       onSubmitted: (_) => _reply(),
                     ),
@@ -757,8 +765,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
                                   width: 16,
                                   height: 16,
                                   child: CircularProgressIndicator(
-                                      color: Colors.white,
-                                      strokeWidth: 2)))
+                                      color: Colors.white, strokeWidth: 2)))
                           : const Icon(Icons.send_rounded,
                               color: Colors.white, size: 18),
                     ),
@@ -773,11 +780,16 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
 
   Color _statusColor(String status) {
     switch (status) {
-      case 'open': return Colors.blue;
-      case 'in_progress': return const Color(AppColors.warning);
-      case 'resolved': return const Color(AppColors.success);
-      case 'closed': return Colors.grey;
-      default: return Colors.grey;
+      case 'open':
+        return Colors.blue;
+      case 'in_progress':
+        return const Color(AppColors.warning);
+      case 'resolved':
+        return const Color(AppColors.success);
+      case 'closed':
+        return Colors.grey;
+      default:
+        return Colors.grey;
     }
   }
 }
@@ -807,12 +819,9 @@ class _MessageBubble extends StatelessWidget {
             Container(
               constraints: BoxConstraints(
                   maxWidth: MediaQuery.of(context).size.width * 0.75),
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 14, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               decoration: BoxDecoration(
-                color: _isUser
-                    ? const Color(AppColors.primary)
-                    : Colors.white,
+                color: _isUser ? const Color(AppColors.primary) : Colors.white,
                 borderRadius: BorderRadius.only(
                   topLeft: const Radius.circular(16),
                   topRight: const Radius.circular(16),
@@ -821,8 +830,7 @@ class _MessageBubble extends StatelessWidget {
                 ),
                 boxShadow: [
                   BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
-                      blurRadius: 6)
+                      color: Colors.black.withValues(alpha: 0.05), blurRadius: 6)
                 ],
               ),
               child: Text(message.message,
@@ -871,18 +879,17 @@ class _RefundsScreenState extends State<RefundsScreen> {
         appBar: AppBar(title: const Text('My Refunds')),
         body: _loading
             ? const Center(
-                child: CircularProgressIndicator(
-                    color: Color(AppColors.primary)))
+                child:
+                    CircularProgressIndicator(color: Color(AppColors.primary)))
             : _refunds.isEmpty
                 ? const EmptyState(
-                    emoji: '💸',
+                    icon: Icons.currency_rupee_rounded,
                     title: 'No refund requests',
                     subtitle: 'Your refund requests will appear here')
                 : ListView.separated(
                     padding: const EdgeInsets.all(16),
                     itemCount: _refunds.length,
-                    separatorBuilder: (_, __) =>
-                        const SizedBox(height: 10),
+                    separatorBuilder: (_, __) => const SizedBox(height: 10),
                     itemBuilder: (ctx, i) {
                       final r = _refunds[i];
                       return Container(
@@ -892,7 +899,7 @@ class _RefundsScreenState extends State<RefundsScreen> {
                           borderRadius: BorderRadius.circular(12),
                           boxShadow: [
                             BoxShadow(
-                                color: Colors.black.withOpacity(0.04),
+                                color: Colors.black.withValues(alpha: 0.04),
                                 blurRadius: 8)
                           ],
                         ),
@@ -900,27 +907,23 @@ class _RefundsScreenState extends State<RefundsScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Row(
-                              mainAxisAlignment:
-                                  MainAxisAlignment.spaceBetween,
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                Text(
-                                    'Order #${r['order_number'] ?? '-'}',
+                                Text('Order #${r['order_number'] ?? '-'}',
                                     style: const TextStyle(
                                         fontWeight: FontWeight.w700)),
                                 Container(
                                   padding: const EdgeInsets.symmetric(
                                       horizontal: 8, vertical: 3),
                                   decoration: BoxDecoration(
-                                    color:
-                                        _refundStatusColor(r['status'])
-                                            .withOpacity(0.1),
-                                    borderRadius:
-                                        BorderRadius.circular(20),
+                                    color: _refundStatusColor(r['status'])
+                                        .withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(20),
                                   ),
                                   child: Text(r['status'] ?? '',
                                       style: TextStyle(
-                                          color: _refundStatusColor(
-                                              r['status']),
+                                          color:
+                                              _refundStatusColor(r['status']),
                                           fontSize: 12,
                                           fontWeight: FontWeight.w700)),
                                 ),
@@ -935,8 +938,7 @@ class _RefundsScreenState extends State<RefundsScreen> {
                             const SizedBox(height: 4),
                             Text(r['reason'] ?? '',
                                 style: TextStyle(
-                                    fontSize: 13,
-                                    color: Colors.grey.shade600)),
+                                    fontSize: 13, color: Colors.grey.shade600)),
                           ],
                         ),
                       );

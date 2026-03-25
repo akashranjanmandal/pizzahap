@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart' hide Category;
 import '../models/models.dart';
 import '../services/api_service.dart';
+import '../services/notification_service.dart';
 
 // ─── AUTH PROVIDER ────────────────────────────────────────────────
 
@@ -33,6 +34,8 @@ class AuthProvider extends ChangeNotifier {
       return true;
     } on ApiException catch (e) {
       _error = e.message; return false;
+    } catch (e) {
+      _error = e.toString().replaceAll("Exception: ", ""); return false;
     } finally { _loading = false; notifyListeners(); }
   }
 
@@ -53,6 +56,8 @@ class AuthProvider extends ChangeNotifier {
       return true;
     } on ApiException catch (e) {
       _error = e.message; return false;
+    } catch (e) {
+      _error = e.toString().replaceAll("Exception: ", ""); return false;
     } finally { _loading = false; notifyListeners(); }
   }
 
@@ -64,6 +69,8 @@ class AuthProvider extends ChangeNotifier {
       return true;
     } on ApiException catch (e) {
       _error = e.message; return false;
+    } catch (e) {
+      _error = e.toString().replaceAll("Exception: ", ""); return false;
     } finally { _loading = false; notifyListeners(); }
   }
 
@@ -82,6 +89,8 @@ class AuthProvider extends ChangeNotifier {
       return true;
     } on ApiException catch (e) {
       _error = e.message; return false;
+    } catch (e) {
+      _error = e.toString().replaceAll("Exception: ", ""); return false;
     } finally { _loading = false; notifyListeners(); }
   }
 
@@ -135,7 +144,7 @@ class CartProvider extends ChangeNotifier {
 
   String get deliveryAddressString {
     final parts = [_addressHouse, _addressTown, _addressState, _addressPincode]
-        .where((p) => p != null && p!.isNotEmpty).toList();
+        .where((p) => p != null && p.isNotEmpty).toList();
     return parts.join(', ');
   }
 
@@ -147,8 +156,9 @@ class CartProvider extends ChangeNotifier {
   double get deliveryFee => _deliveryType == 'pickup' ? 0 : (subtotal < 300 ? 40 : 0);
   double get discount => _appliedCoupon?.calculatedDiscount ?? 0.0;
   double get coinsDiscount => _coinsToRedeem.toDouble();
-  double get tax => (subtotal - discount - coinsDiscount + deliveryFee) * 0.05;
-  double get total => subtotal - discount - coinsDiscount + deliveryFee + tax;
+  // Backend has NO TAX — total = subtotal - discount - coins_discount + delivery_fee
+  double get tax => 0.0;
+  double get total => (subtotal - discount - coinsDiscount + deliveryFee).clamp(0.0, double.infinity);
 
   bool get isEmpty => _items.isEmpty;
 
@@ -185,7 +195,10 @@ class CartProvider extends ChangeNotifier {
   void setAvailableCoins(int coins) { _availableCoins = coins; notifyListeners(); }
 
   void setCoinsToRedeem(int coins) {
-    _coinsToRedeem = coins.clamp(0, _availableCoins);
+    // Clamp: can't redeem more coins than available, and can't exceed the payable amount
+    final maxByBalance = coins.clamp(0, _availableCoins);
+    final payable = (subtotal - discount + deliveryFee).floor();
+    _coinsToRedeem = maxByBalance.clamp(0, payable);
     notifyListeners();
   }
 
@@ -256,6 +269,8 @@ class MenuProvider extends ChangeNotifier {
       _featuredProducts = results[1] as List<Product>;
     } on ApiException catch (e) {
       _error = e.message;
+    } catch (e) {
+      _error = e.toString().replaceAll("Exception: ", "");
     } finally { _loading = false; notifyListeners(); }
   }
 
@@ -271,6 +286,8 @@ class MenuProvider extends ChangeNotifier {
       _products = result['products'] as List<Product>;
     } on ApiException catch (e) {
       _error = e.message;
+    } catch (e) {
+      _error = e.toString().replaceAll("Exception: ", "");
     } finally { _loading = false; notifyListeners(); }
   }
 
@@ -309,6 +326,8 @@ class OrderProvider extends ChangeNotifier {
       _orders = result['orders'] as List<Order>;
     } on ApiException catch (e) {
       _error = e.message;
+    } catch (e) {
+      _error = e.toString().replaceAll("Exception: ", "");
     } finally { _loading = false; notifyListeners(); }
   }
 
@@ -318,6 +337,8 @@ class OrderProvider extends ChangeNotifier {
       _currentOrder = await ApiService.getOrder(id);
     } on ApiException catch (e) {
       _error = e.message;
+    } catch (e) {
+      _error = e.toString().replaceAll("Exception: ", "");
     } finally { _loading = false; notifyListeners(); }
   }
 
@@ -327,6 +348,8 @@ class OrderProvider extends ChangeNotifier {
       return await ApiService.placeOrder(data);
     } on ApiException catch (e) {
       _error = e.message; return null;
+    } catch (e) {
+      _error = e.toString().replaceAll("Exception: ", ""); return null;
     } finally { _loading = false; notifyListeners(); }
   }
 
@@ -377,8 +400,19 @@ class NotificationProvider extends ChangeNotifier {
     _loading = true; notifyListeners();
     try {
       final result = await ApiService.getNotifications();
-      _notifications = result['notifications'] as List<AppNotification>;
-      _unreadCount = result['unread_count'] as int;
+      final newNotifs = result['notifications'] as List<AppNotification>;
+      final newCount  = result['unread_count'] as int;
+      // Vibrate + show local notification if new unread notifications arrived
+      if (newCount > _unreadCount && _notifications.isNotEmpty) {
+        final latest = newNotifs.first;
+        NotificationService.show(
+          title  : latest.title,
+          body   : latest.message,
+          payload: null,
+        );
+      }
+      _notifications = newNotifs;
+      _unreadCount   = newCount;
     } catch (_) {}
     _loading = false; notifyListeners();
   }

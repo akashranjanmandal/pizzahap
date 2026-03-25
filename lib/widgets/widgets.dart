@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:shimmer/shimmer.dart';
 import '../config/app_config.dart';
 import '../models/models.dart';
+import 'app_loader.dart';
+export 'app_loader.dart';
+export 'cart_fab.dart';
 
 // ─── PIZZA NET IMAGE ──────────────────────────────────────────────
 
@@ -13,20 +17,31 @@ class PizzaNetImage extends StatelessWidget {
   final BorderRadius? borderRadius;
 
   const PizzaNetImage({
-    super.key, this.url, this.width, this.height,
-    this.fit = BoxFit.cover, this.borderRadius,
+    super.key,
+    this.url,
+    this.width,
+    this.height,
+    this.fit = BoxFit.cover,
+    this.borderRadius,
   });
 
   @override
   Widget build(BuildContext context) {
-    final child = url != null && url!.isNotEmpty
-      ? CachedNetworkImage(
-          imageUrl: url!,
-          width: width, height: height, fit: fit,
-          placeholder: (ctx, url) => _shimmer(),
-          errorWidget: (ctx, url, err) => _placeholder(),
-        )
-      : _placeholder();
+    final imageUrl = url != null && url!.isNotEmpty ? url! : null;
+    final child = imageUrl != null
+        ? CachedNetworkImage(
+            imageUrl: imageUrl,
+            width: width,
+            height: height,
+            fit: fit,
+            httpHeaders: const {'Accept': 'image/*'},
+            placeholder: (ctx, url) => _shimmer(),
+            errorWidget: (ctx, url, err) {
+              debugPrint('Image load error: $url => $err');
+              return _placeholder();
+            },
+          )
+        : _placeholder();
 
     if (borderRadius != null) {
       return ClipRRect(borderRadius: borderRadius!, child: child);
@@ -35,16 +50,25 @@ class PizzaNetImage extends StatelessWidget {
   }
 
   Widget _shimmer() => Shimmer.fromColors(
-    baseColor: Colors.grey.shade200,
-    highlightColor: Colors.grey.shade100,
-    child: Container(width: width, height: height, color: Colors.white),
-  );
+        baseColor: Colors.grey.shade200,
+        highlightColor: Colors.grey.shade50,
+        child: Container(width: width, height: height, color: Colors.white),
+      );
 
   Widget _placeholder() => Container(
-    width: width, height: height,
-    color: const Color(0xFFFFF0EE),
-    child: const Center(child: Text('🍕', style: TextStyle(fontSize: 32))),
-  );
+        width: width,
+        height: height,
+        color: const Color(0xFFF5F5F5),
+        child: Center(
+            child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.local_pizza_rounded,
+                size: (width ?? 60) * 0.4,
+                color: const Color(AppColors.primary).withValues(alpha: 0.25)),
+          ],
+        )),
+      );
 }
 
 // ─── VEG BADGE ────────────────────────────────────────────────────
@@ -55,120 +79,191 @@ class VegBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-    width: 18, height: 18,
-    decoration: BoxDecoration(
-      border: Border.all(
-        color: isVeg ? const Color(AppColors.vegGreen) : const Color(AppColors.nonVegRed),
-        width: 1.5,
-      ),
-      borderRadius: BorderRadius.circular(3),
-    ),
-    child: Center(
-      child: Container(
-        width: 10, height: 10,
+        width: 18,
+        height: 18,
         decoration: BoxDecoration(
-          color: isVeg ? const Color(AppColors.vegGreen) : const Color(AppColors.nonVegRed),
-          shape: BoxShape.circle,
+          border: Border.all(
+            color: isVeg
+                ? const Color(AppColors.vegGreen)
+                : const Color(AppColors.nonVegRed),
+            width: 1.5,
+          ),
+          borderRadius: BorderRadius.circular(3),
         ),
-      ),
-    ),
-  );
+        child: Center(
+          child: Container(
+            width: 10,
+            height: 10,
+            decoration: BoxDecoration(
+              color: isVeg
+                  ? const Color(AppColors.vegGreen)
+                  : const Color(AppColors.nonVegRed),
+              shape: BoxShape.circle,
+            ),
+          ),
+        ),
+      );
 }
 
 // ─── PRODUCT CARD ─────────────────────────────────────────────────
 
-class ProductCard extends StatelessWidget {
+class ProductCard extends StatefulWidget {
   final Product product;
   final VoidCallback onTap;
   final VoidCallback? onAddToCart;
 
-  const ProductCard({super.key, required this.product, required this.onTap, this.onAddToCart});
+  const ProductCard(
+      {super.key,
+      required this.product,
+      required this.onTap,
+      this.onAddToCart});
+
+  @override
+  State<ProductCard> createState() => _ProductCardState();
+}
+
+class _ProductCardState extends State<ProductCard>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _pressCtrl;
+  late Animation<double> _pressAnim;
+
+  @override
+  void initState() {
+    super.initState();
+    _pressCtrl = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 100));
+    _pressAnim = Tween<double>(begin: 1.0, end: 0.96).animate(
+      CurvedAnimation(parent: _pressCtrl, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _pressCtrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) => GestureDetector(
-    onTap: onTap,
-    child: Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(
-          color: Colors.black.withOpacity(0.05),
-          blurRadius: 10, offset: const Offset(0, 2),
-        )],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Stack(
-            children: [
-              ClipRRect(
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(16), topRight: Radius.circular(16),
-                ),
-                child: AspectRatio(
-                  aspectRatio: 16 / 10,
-                  child: PizzaNetImage(url: product.imageUrl, width: double.infinity),
-                ),
-              ),
-              Positioned(top: 10, left: 10, child: VegBadge(isVeg: product.isVeg)),
-              if (product.isFeatured)
-                Positioned(
-                  top: 10, right: 10,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: const Color(AppColors.accent),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: const Text('⭐ Featured',
-                      style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w700)),
-                  ),
-                ),
-            ],
-          ),
-          Padding(
-            padding: const EdgeInsets.all(12),
+        onTapDown: (_) => _pressCtrl.forward(),
+        onTapUp: (_) {
+          _pressCtrl.reverse();
+          widget.onTap();
+        },
+        onTapCancel: () => _pressCtrl.reverse(),
+        child: ScaleTransition(
+          scale: _pressAnim,
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(18),
+              boxShadow: [
+                BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.06),
+                    blurRadius: 12,
+                    offset: const Offset(0, 3))
+              ],
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(product.name,
-                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
-                  maxLines: 1, overflow: TextOverflow.ellipsis),
-                if (product.description != null) ...[
-                  const SizedBox(height: 2),
-                  Text(product.description!,
-                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-                    maxLines: 2, overflow: TextOverflow.ellipsis),
-                ],
-                const SizedBox(height: 8),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                Stack(
                   children: [
-                    Text('₹${product.basePrice.toStringAsFixed(0)}',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w800, fontSize: 16,
-                        color: Color(AppColors.primary),
-                      )),
-                    GestureDetector(
-                      onTap: onAddToCart ?? onTap,
-                      child: Container(
-                        width: 32, height: 32,
-                        decoration: const BoxDecoration(
-                          color: Color(AppColors.primary),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(Icons.add, color: Colors.white, size: 18),
+                    ClipRRect(
+                      borderRadius: const BorderRadius.only(
+                          topLeft: Radius.circular(18),
+                          topRight: Radius.circular(18)),
+                      child: AspectRatio(
+                        aspectRatio: 16 / 10,
+                        child: PizzaNetImage(
+                            url: widget.product.imageUrl,
+                            width: double.infinity),
                       ),
                     ),
+                    Positioned(
+                        top: 10,
+                        left: 10,
+                        child: VegBadge(isVeg: widget.product.isVeg)),
+                    if (widget.product.isFeatured)
+                      Positioned(
+                        top: 8,
+                        right: 8,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: const Color(AppColors.accent),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.star_rounded,
+                                    color: Colors.white, size: 11),
+                                SizedBox(width: 3),
+                                Text('Featured',
+                                    style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.w700)),
+                              ]),
+                        ),
+                      ),
                   ],
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(widget.product.name,
+                          style: const TextStyle(
+                              fontWeight: FontWeight.w700, fontSize: 13),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis),
+                      if (widget.product.description != null) ...[
+                        const SizedBox(height: 2),
+                        Text(widget.product.description!,
+                            style: TextStyle(
+                                fontSize: 11, color: Colors.grey.shade500),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis),
+                      ],
+                      const SizedBox(height: 10),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                              '₹${widget.product.basePrice.toStringAsFixed(0)}',
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 16,
+                                  color: Color(AppColors.primary))),
+                          GestureDetector(
+                            onTap: () {
+                              HapticFeedback.selectionClick();
+                              (widget.onAddToCart ?? widget.onTap)();
+                            },
+                            child: Container(
+                              width: 32,
+                              height: 32,
+                              decoration: const BoxDecoration(
+                                  color: Color(AppColors.primary),
+                                  shape: BoxShape.circle),
+                              child: const Icon(Icons.add_rounded,
+                                  color: Colors.white, size: 18),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
           ),
-        ],
-      ),
-    ),
-  );
+        ),
+      );
 }
 
 // ─── ORDER STATUS CHIP ────────────────────────────────────────────
@@ -179,118 +274,202 @@ class OrderStatusChip extends StatelessWidget {
 
   Color get _color {
     switch (status) {
-      case 'pending': return const Color(AppColors.warning);
-      case 'confirmed': return Colors.blue;
-      case 'preparing': return Colors.orange;
-      case 'out_for_delivery': return Colors.indigo;
-      case 'delivered': return const Color(AppColors.success);
-      case 'cancelled': return const Color(AppColors.error);
-      default: return Colors.grey;
+      case 'pending':
+        return const Color(AppColors.warning);
+      case 'confirmed':
+        return Colors.blue;
+      case 'preparing':
+        return Colors.orange;
+      case 'out_for_delivery':
+        return Colors.indigo;
+      case 'delivered':
+        return const Color(AppColors.success);
+      case 'cancelled':
+        return const Color(AppColors.error);
+      default:
+        return Colors.grey;
+    }
+  }
+
+  IconData get _icon {
+    switch (status) {
+      case 'pending':
+        return Icons.hourglass_empty_rounded;
+      case 'confirmed':
+        return Icons.check_circle_outline_rounded;
+      case 'preparing':
+        return Icons.restaurant_rounded;
+      case 'out_for_delivery':
+        return Icons.delivery_dining_rounded;
+      case 'delivered':
+        return Icons.celebration_rounded;
+      case 'cancelled':
+        return Icons.cancel_outlined;
+      default:
+        return Icons.info_outline_rounded;
     }
   }
 
   String get _label {
     switch (status) {
-      case 'pending': return '⏳ Pending';
-      case 'confirmed': return '✅ Confirmed';
-      case 'preparing': return '👨‍🍳 Preparing';
-      case 'out_for_delivery': return '🛵 On the way';
-      case 'delivered': return '🎉 Delivered';
-      case 'cancelled': return '❌ Cancelled';
-      default: return status;
+      case 'pending':
+        return 'Pending';
+      case 'confirmed':
+        return 'Confirmed';
+      case 'preparing':
+        return 'Preparing';
+      case 'out_for_delivery':
+        return 'On the way';
+      case 'delivered':
+        return 'Delivered';
+      case 'cancelled':
+        return 'Cancelled';
+      default:
+        return status;
     }
   }
 
   @override
   Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-    decoration: BoxDecoration(
-      color: _color.withOpacity(0.12),
-      borderRadius: BorderRadius.circular(20),
-    ),
-    child: Text(_label,
-      style: TextStyle(color: _color, fontSize: 12, fontWeight: FontWeight.w700)),
-  );
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: _color.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: _color.withValues(alpha: 0.3)),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(_icon, size: 14, color: _color),
+          const SizedBox(width: 5),
+          Text(_label,
+              style: TextStyle(
+                  color: _color, fontSize: 12, fontWeight: FontWeight.w700)),
+        ]),
+      );
 }
 
-// ─── SECTION HEADER ───────────────────────────────────────────────
-
-class SectionHeader extends StatelessWidget {
-  final String title;
-  final String? subtitle;
-  final VoidCallback? onSeeAll;
-
-  const SectionHeader({super.key, required this.title, this.subtitle, this.onSeeAll});
-
-  @override
-  Widget build(BuildContext context) => Row(
-    children: [
-      Expanded(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
-            if (subtitle != null)
-              Text(subtitle!, style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
-          ],
-        ),
-      ),
-      if (onSeeAll != null)
-        TextButton(
-          onPressed: onSeeAll,
-          child: const Text('See all',
-            style: TextStyle(color: Color(AppColors.primary), fontWeight: FontWeight.w700)),
-        ),
-    ],
-  );
-}
-
-// ─── EMPTY STATE ──────────────────────────────────────────────────
+// ─── EMPTY STATE ─────────────────────────────────────────────────
 
 class EmptyState extends StatelessWidget {
-  final String emoji;
+  final IconData? icon;
+  final String? emoji;
   final String title;
-  final String? subtitle;
+  final String subtitle;
   final String? buttonText;
   final VoidCallback? onButton;
 
   const EmptyState({
-    super.key, required this.emoji, required this.title,
-    this.subtitle, this.buttonText, this.onButton,
+    super.key,
+    this.icon,
+    this.emoji,
+    required this.title,
+    this.subtitle = '',
+    this.buttonText,
+    this.onButton,
   });
 
   @override
   Widget build(BuildContext context) => Center(
-    child: Padding(
-      padding: const EdgeInsets.all(32),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(emoji, style: const TextStyle(fontSize: 64)),
-          const SizedBox(height: 16),
-          Text(title,
-            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
-            textAlign: TextAlign.center),
-          if (subtitle != null) ...[
-            const SizedBox(height: 8),
-            Text(subtitle!,
-              style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
-              textAlign: TextAlign.center),
-          ],
-          if (buttonText != null && onButton != null) ...[
-            const SizedBox(height: 24),
-            SizedBox(
-              width: 200,
-              child: ElevatedButton(onPressed: onButton, child: Text(buttonText!)),
+        child: Padding(
+          padding: const EdgeInsets.all(40),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                color: const Color(AppColors.primary).withValues(alpha: 0.07),
+                shape: BoxShape.circle,
+              ),
+              child: icon != null
+                  ? Icon(icon,
+                      size: 38,
+                      color: const Color(AppColors.primary).withValues(alpha: 0.5))
+                  : Center(
+                      child: Text(emoji ?? '',
+                          style: const TextStyle(fontSize: 38))),
             ),
-          ],
-        ],
-      ),
-    ),
-  );
+            const SizedBox(height: 18),
+            Text(title,
+                style:
+                    const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 6),
+            Text(subtitle,
+                style: TextStyle(color: Colors.grey.shade500, fontSize: 14),
+                textAlign: TextAlign.center),
+            if (buttonText != null && onButton != null) ...[
+              const SizedBox(height: 24),
+              ElevatedButton.icon(
+                onPressed: onButton,
+                icon: const Icon(Icons.arrow_forward_rounded, size: 16),
+                label: Text(buttonText!),
+                style:
+                    ElevatedButton.styleFrom(minimumSize: const Size(160, 46)),
+              ),
+            ],
+          ]),
+        ),
+      );
 }
 
-// ─── PRICE ROW ────────────────────────────────────────────────────
+// ─── SECTION HEADER ──────────────────────────────────────────────
+
+class SectionHeader extends StatelessWidget {
+  final String title;
+  final String? subtitle;
+  final IconData? titleIcon;
+  final Color? titleIconColor;
+  final VoidCallback? onSeeAll;
+
+  const SectionHeader({
+    super.key,
+    required this.title,
+    this.subtitle,
+    this.titleIcon,
+    this.titleIconColor,
+    this.onSeeAll,
+  });
+
+  @override
+  Widget build(BuildContext context) => Row(
+        children: [
+          if (titleIcon != null) ...[
+            Icon(titleIcon,
+                size: 18,
+                color: titleIconColor ?? const Color(AppColors.primary)),
+            const SizedBox(width: 6),
+          ],
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(title,
+                    style: const TextStyle(
+                        fontSize: 18, fontWeight: FontWeight.w800)),
+                if (subtitle != null)
+                  Text(subtitle!,
+                      style:
+                          TextStyle(fontSize: 12, color: Colors.grey.shade500)),
+              ],
+            ),
+          ),
+          if (onSeeAll != null)
+            GestureDetector(
+              onTap: onSeeAll,
+              child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                Text('See all',
+                    style: TextStyle(
+                        color: Color(AppColors.primary),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700)),
+                Icon(Icons.chevron_right_rounded,
+                    color: Color(AppColors.primary), size: 18),
+              ]),
+            ),
+        ],
+      );
+}
+
+// ─── PRICE ROW ───────────────────────────────────────────────────
 
 class PriceRow extends StatelessWidget {
   final String label;
@@ -299,31 +478,44 @@ class PriceRow extends StatelessWidget {
   final Color? color;
 
   const PriceRow({
-    super.key, required this.label, required this.amount,
-    this.isBold = false, this.color,
+    super.key,
+    required this.label,
+    required this.amount,
+    this.isBold = false,
+    this.color,
   });
 
   @override
   Widget build(BuildContext context) => Row(
-    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-    children: [
-      Expanded(
-        child: Text(label, style: TextStyle(
-          fontSize: isBold ? 16 : 14,
-          fontWeight: isBold ? FontWeight.w700 : FontWeight.w500,
-          color: color ?? (isBold ? const Color(AppColors.textPrimary) : Colors.grey.shade700),
-        ), overflow: TextOverflow.ellipsis),
-      ),
-      Text('₹${amount.toStringAsFixed(2)}', style: TextStyle(
-        fontSize: isBold ? 18 : 14,
-        fontWeight: isBold ? FontWeight.w800 : FontWeight.w600,
-        color: color ?? (isBold ? const Color(AppColors.primary) : const Color(AppColors.textPrimary)),
-      )),
-    ],
-  );
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label,
+              style: TextStyle(
+                fontSize: isBold ? 16 : 14,
+                fontWeight: isBold ? FontWeight.w800 : FontWeight.w500,
+                color: color ??
+                    (isBold
+                        ? const Color(AppColors.textPrimary)
+                        : const Color(AppColors.textSecondary)),
+              )),
+          Text(
+            amount < 0
+                ? '- ₹${(-amount).toStringAsFixed(0)}'
+                : '₹${amount.toStringAsFixed(0)}',
+            style: TextStyle(
+              fontSize: isBold ? 18 : 14,
+              fontWeight: isBold ? FontWeight.w800 : FontWeight.w600,
+              color: color ??
+                  (isBold
+                      ? const Color(AppColors.primary)
+                      : const Color(AppColors.textPrimary)),
+            ),
+          ),
+        ],
+      );
 }
 
-// ─── LOADING OVERLAY ──────────────────────────────────────────────
+// ─── LOADING OVERLAY ─────────────────────────────────────────────
 
 class LoadingOverlay extends StatelessWidget {
   final bool loading;
@@ -332,17 +524,17 @@ class LoadingOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Stack(
-    children: [
-      child,
-      if (loading)
-        Container(
-          color: Colors.black26,
-          child: const Center(
-            child: CircularProgressIndicator(color: Color(AppColors.primary)),
-          ),
-        ),
-    ],
-  );
+        children: [
+          child,
+          if (loading)
+            Container(
+              color: Colors.black26,
+              child: const Center(
+                  child: CircularProgressIndicator(
+                      color: Color(AppColors.primary))),
+            ),
+        ],
+      );
 }
 
 // ─── QUANTITY STEPPER ─────────────────────────────────────────────
@@ -360,168 +552,55 @@ class QuantityStepper extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) => Row(
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      _btn(Icons.remove, onDecrement),
-      Container(
-        width: 36, alignment: Alignment.center,
-        child: Text('$value',
-          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
-      ),
-      _btn(Icons.add, onIncrement),
-    ],
-  );
+  Widget build(BuildContext context) => Container(
+        decoration: BoxDecoration(
+          color: const Color(AppColors.background),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: Colors.grey.shade200),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _btn(Icons.remove_rounded, onDecrement),
+            SizedBox(
+              width: 34,
+              child: Text('$value',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w800, fontSize: 15)),
+            ),
+            _btn(Icons.add_rounded, onIncrement),
+          ],
+        ),
+      );
 
   Widget _btn(IconData icon, VoidCallback onTap) => GestureDetector(
-    onTap: onTap,
-    child: Container(
-      width: 32, height: 32,
-      decoration: BoxDecoration(
-        color: const Color(AppColors.primary).withOpacity(0.1),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Icon(icon, color: const Color(AppColors.primary), size: 18),
-    ),
-  );
-}
-
-// ─── TOP SNACK BANNER ──────────────────────────────────────────────
-// Shows message at the TOP of the screen as an overlay banner
-
-OverlayEntry? _activeSnackOverlay;
-
-void showSnack(BuildContext context, String message, {bool isError = false}) {
-  // Remove any existing overlay
-  _activeSnackOverlay?.remove();
-  _activeSnackOverlay = null;
-
-  final overlay = Overlay.of(context);
-  if (overlay == null) return;
-
-  late OverlayEntry entry;
-  entry = OverlayEntry(
-    builder: (ctx) => _TopSnackBanner(
-      message: message,
-      isError: isError,
-      onDismiss: () {
-        entry.remove();
-        if (_activeSnackOverlay == entry) _activeSnackOverlay = null;
-      },
-    ),
-  );
-
-  _activeSnackOverlay = entry;
-  overlay.insert(entry);
-}
-
-class _TopSnackBanner extends StatefulWidget {
-  final String message;
-  final bool isError;
-  final VoidCallback onDismiss;
-
-  const _TopSnackBanner({
-    required this.message,
-    required this.isError,
-    required this.onDismiss,
-  });
-
-  @override
-  State<_TopSnackBanner> createState() => _TopSnackBannerState();
-}
-
-class _TopSnackBannerState extends State<_TopSnackBanner>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _ctrl;
-  late Animation<Offset> _slide;
-  late Animation<double> _fade;
-
-  @override
-  void initState() {
-    super.initState();
-    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 300));
-    _slide = Tween<Offset>(begin: const Offset(0, -1), end: Offset.zero)
-        .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOutCubic));
-    _fade = Tween<double>(begin: 0, end: 1)
-        .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOut));
-    _ctrl.forward();
-
-    // Auto dismiss after 3 seconds
-    Future.delayed(const Duration(seconds: 3), () {
-      if (mounted) _dismiss();
-    });
-  }
-
-  void _dismiss() async {
-    if (!mounted) return;
-    await _ctrl.reverse();
-    if (mounted) widget.onDismiss();
-  }
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final top = MediaQuery.of(context).padding.top;
-    return Positioned(
-      top: top + 8,
-      left: 16,
-      right: 16,
-      child: SlideTransition(
-        position: _slide,
-        child: FadeTransition(
-          opacity: _fade,
-          child: Material(
-            color: Colors.transparent,
-            child: GestureDetector(
-              onTap: _dismiss,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
-                decoration: BoxDecoration(
-                  color: widget.isError
-                      ? const Color(AppColors.error)
-                      : const Color(0xFF1A1A1A),
-                  borderRadius: BorderRadius.circular(14),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.25),
-                      blurRadius: 16, offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      widget.isError
-                          ? Icons.error_outline_rounded
-                          : Icons.check_circle_outline_rounded,
-                      color: Colors.white,
-                      size: 20,
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        widget.message,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    const Icon(Icons.close_rounded, color: Colors.white54, size: 16),
-                  ],
-                ),
-              ),
-            ),
+        onTap: () {
+          HapticFeedback.selectionClick();
+          onTap();
+        },
+        child: Container(
+          width: 34,
+          height: 34,
+          decoration: BoxDecoration(
+            color: const Color(AppColors.primary).withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(8),
           ),
+          child: Icon(icon, color: const Color(AppColors.primary), size: 17),
         ),
-      ),
-    );
+      );
+}
+
+// ─── TOP SNACK BANNER ─────────────────────────────────────────────
+
+// ─── showSnack delegates to AppToast ─────────────────────────────
+// Keep showSnack for compatibility with existing screens
+void showSnack(BuildContext context, String message, {bool isError = false}) {
+  if (isError) {
+    AppToast.error(context, message);
+  } else {
+    AppToast.success(context, message);
   }
 }
+
+
