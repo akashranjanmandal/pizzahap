@@ -1,3 +1,4 @@
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -463,8 +464,7 @@ class _CouponSection extends StatelessWidget {
                         ? const SizedBox(
                             height: 16,
                             width: 16,
-                            child: CircularProgressIndicator(
-                                color: Colors.white, strokeWidth: 2))
+                            child: PizzaSpinner(size: 20, color: Colors.white))
                         : const Text('Apply',
                             style: TextStyle(fontWeight: FontWeight.w700)),
                   ),

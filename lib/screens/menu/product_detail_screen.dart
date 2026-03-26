@@ -1,3 +1,4 @@
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -99,7 +100,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
     if (_loading) {
       return const Scaffold(
         body: Center(
-            child: CircularProgressIndicator(color: Color(AppColors.primary))),
+            child: PizzaSpinner(size: 40)),
       );
     }
     if (_product == null) {

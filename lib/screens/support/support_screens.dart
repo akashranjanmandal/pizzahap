@@ -1,3 +1,4 @@
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -46,7 +47,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       ),
       body: prov.loading
           ? const Center(
-              child: CircularProgressIndicator(color: Color(AppColors.primary)))
+              child: PizzaSpinner(size: 40))
           : prov.notifications.isEmpty
               ? const EmptyState(
                   icon: Icons.notifications_none_rounded,
@@ -188,7 +189,7 @@ class _CouponsScreenState extends State<CouponsScreen> {
         body: _loading
             ? const Center(
                 child:
-                    CircularProgressIndicator(color: Color(AppColors.primary)))
+                    PizzaSpinner(size: 40))
             : _coupons.isEmpty
                 ? const EmptyState(
                     icon: Icons.local_offer_outlined,
@@ -500,7 +501,7 @@ class _SupportScreenState extends State<SupportScreen> {
         body: _loading
             ? const Center(
                 child:
-                    CircularProgressIndicator(color: Color(AppColors.primary)))
+                    PizzaSpinner(size: 40))
             : _tickets.isEmpty
                 ? EmptyState(
                     icon: Icons.headset_mic_outlined,
@@ -674,7 +675,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
       return const Scaffold(
           body: Center(
               child:
-                  CircularProgressIndicator(color: Color(AppColors.primary))));
+                  PizzaSpinner(size: 40)));
     }
     if (_ticket == null) {
       return const Scaffold(body: Center(child: Text('Ticket not found')));
@@ -764,8 +765,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
                               child: SizedBox(
                                   width: 16,
                                   height: 16,
-                                  child: CircularProgressIndicator(
-                                      color: Colors.white, strokeWidth: 2)))
+                                  child: PizzaSpinner(size: 20, color: Colors.white)))
                           : const Icon(Icons.send_rounded,
                               color: Colors.white, size: 18),
                     ),
@@ -880,7 +880,7 @@ class _RefundsScreenState extends State<RefundsScreen> {
         body: _loading
             ? const Center(
                 child:
-                    CircularProgressIndicator(color: Color(AppColors.primary)))
+                    PizzaSpinner(size: 40))
             : _refunds.isEmpty
                 ? const EmptyState(
                     icon: Icons.currency_rupee_rounded,

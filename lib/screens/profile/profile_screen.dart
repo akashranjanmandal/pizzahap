@@ -271,8 +271,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                           ? const SizedBox(
                               width: 18,
                               height: 18,
-                              child: CircularProgressIndicator(
-                                  color: Colors.white, strokeWidth: 2))
+                              child: PizzaSpinner(size: 20, color: Colors.white))
                           : const Icon(Icons.save_rounded, size: 18),
                       label: Text(auth.loading ? 'Saving...' : 'Save Changes',
                           style: const TextStyle(

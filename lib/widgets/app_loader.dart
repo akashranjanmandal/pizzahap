@@ -86,7 +86,7 @@ class _LoaderOverlayState extends State<_LoaderOverlay>
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   // Animated pizza spinner
-                  _PizzaSpinner(),
+                  const PizzaSpinner(),
                   if (widget.message != null) ...[
                     const SizedBox(height: 16),
                     Text(
@@ -109,12 +109,16 @@ class _LoaderOverlayState extends State<_LoaderOverlay>
   }
 }
 
-class _PizzaSpinner extends StatefulWidget {
+class PizzaSpinner extends StatefulWidget {
+  final double size;
+  final Color? color;
+  const PizzaSpinner({super.key, this.size = 56, this.color});
+
   @override
-  State<_PizzaSpinner> createState() => _PizzaSpinnerState();
+  State<PizzaSpinner> createState() => _PizzaSpinnerState();
 }
 
-class _PizzaSpinnerState extends State<_PizzaSpinner>
+class _PizzaSpinnerState extends State<PizzaSpinner>
     with SingleTickerProviderStateMixin {
   late AnimationController _spin;
 
@@ -135,40 +139,43 @@ class _PizzaSpinnerState extends State<_PizzaSpinner>
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: 56,
-      height: 56,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          // Outer ring
-          RotationTransition(
-            turns: _spin,
-            child: CustomPaint(
-              size: const Size(56, 56),
-              painter: _ArcPainter(color: const Color(AppColors.primary)),
+      width: widget.size,
+      height: widget.size,
+      child: Transform.scale(
+        scale: widget.size / 56.0,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            // Outer ring
+            RotationTransition(
+              turns: _spin,
+              child: CustomPaint(
+                size: const Size(56, 56),
+                painter: _ArcPainter(color: widget.color ?? const Color(AppColors.primary)),
+              ),
             ),
-          ),
-          // Logo center
-          Container(
-            width: 34,
-            height: 34,
-            decoration: BoxDecoration(
-              color: const Color(AppColors.primary).withValues(alpha: 0.08),
-              shape: BoxShape.circle,
-            ),
-            child: ClipOval(
-              child: Image.asset(
-                'assets/images/logo.png',
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => const Icon(
-                  Icons.local_pizza_rounded,
-                  color: Color(AppColors.primary),
-                  size: 20,
+            // Logo center
+            Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                color: (widget.color ?? const Color(AppColors.primary)).withValues(alpha: 0.08),
+                shape: BoxShape.circle,
+              ),
+              child: ClipOval(
+                child: Image.asset(
+                  'assets/images/logo.png',
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => Icon(
+                    Icons.local_pizza_rounded,
+                    color: widget.color ?? const Color(AppColors.primary),
+                    size: 20,
+                  ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

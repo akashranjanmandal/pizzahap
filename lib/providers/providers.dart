@@ -9,11 +9,13 @@ class AuthProvider extends ChangeNotifier {
   User? _user;
   bool _loading = false;
   String? _error;
+  bool _sessionExpired = false;
 
   User? get user => _user;
   bool get loading => _loading;
   String? get error => _error;
   bool get isLoggedIn => _user != null && ApiService.isLoggedIn;
+  bool get sessionExpired => _sessionExpired;
 
   Future<void> init() async {
     await ApiService.init();
@@ -95,12 +97,40 @@ class AuthProvider extends ChangeNotifier {
   }
 
   /// Refresh user (e.g. after order delivered to update coin_balance)
-  Future<void> refreshUser() async {
+  /// Returns false if the session has genuinely expired and tokens are cleared.
+  Future<bool> refreshUser() async {
+    if (!ApiService.isLoggedIn) return false;
     try {
       _user = await ApiService.getMe();
+      _sessionExpired = false;
       notifyListeners();
-    } catch (_) {}
+      return true;
+    } on ApiException catch (e) {
+      if (e.message == 'token_refreshed') {
+        // The token was refreshed successfully — retry getMe once
+        try {
+          _user = await ApiService.getMe();
+          _sessionExpired = false;
+          notifyListeners();
+          return true;
+        } catch (_) {
+          return true; // still transient
+        }
+      }
+      // If we still have a 401 and tokens are now gone, session truly expired
+      if (e.statusCode == 401 && !ApiService.isLoggedIn) {
+        _user = null;
+        _sessionExpired = true;
+        notifyListeners();
+        return false;
+      }
+      return true; // other errors (network, 5xx) are transient — don't log out
+    } catch (_) {
+      return true; // network errors are transient
+    }
   }
+
+  void resetSessionExpired() { _sessionExpired = false; }
 
   void clearError() { _error = null; notifyListeners(); }
 }
@@ -312,11 +342,13 @@ class MenuProvider extends ChangeNotifier {
 class OrderProvider extends ChangeNotifier {
   List<Order> _orders = [];
   Order? _currentOrder;
+  Order? _activeOrder; // Latest in-progress order
   bool _loading = false;
   String? _error;
 
   List<Order> get orders => _orders;
   Order? get currentOrder => _currentOrder;
+  Order? get activeOrder => _activeOrder;
   bool get loading => _loading;
   String? get error => _error;
 
@@ -325,11 +357,29 @@ class OrderProvider extends ChangeNotifier {
     try {
       final result = await ApiService.getOrders(status: status);
       _orders = result['orders'] as List<Order>;
+      // Refresh active order whenever orders are loaded
+      if (status == null) _refreshActiveOrder();
     } on ApiException catch (e) {
       _error = e.message;
     } catch (e) {
       _error = e.toString().replaceAll("Exception: ", "");
     } finally { _loading = false; notifyListeners(); }
+  }
+
+  /// Load just the latest active (in-progress) order for the home banner.
+  Future<void> loadActiveOrder() async {
+    try {
+      final result = await ApiService.getOrders();
+      final all = result['orders'] as List<Order>;
+      _refreshActiveOrder(all);
+      notifyListeners();
+    } catch (_) {}
+  }
+
+  void _refreshActiveOrder([List<Order>? orders]) {
+    final list = orders ?? _orders;
+    const active = ['pending', 'confirmed', 'preparing', 'out_for_delivery'];
+    _activeOrder = list.where((o) => active.contains(o.status)).firstOrNull;
   }
 
   Future<Order?> loadOrder(int id) async {

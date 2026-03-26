@@ -34,10 +34,12 @@ class _HomeScreenState extends State<HomeScreen>
   Future<void> _loadData() async {
     final menu = context.read<MenuProvider>();
     final auth = context.read<AuthProvider>();
+    final orders = context.read<OrderProvider>();
 
     await Future.wait([
       menu.loadHomeData(),
       auth.refreshUser(),
+      orders.loadActiveOrder(),
     ]);
   }
 
@@ -115,7 +117,7 @@ class _HomeScreenState extends State<HomeScreen>
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      'Hey $firstName!',
+                                      'Hey $firstName! 🤚',
                                       style: const TextStyle(
                                         color: Colors.white,
                                         fontSize: 20,
@@ -159,40 +161,47 @@ class _HomeScreenState extends State<HomeScreen>
                                   ],
                                 ),
                               ),
-                              // Coins chip - always visible with label
                               GestureDetector(
                                 onTap: () =>
                                     Navigator.pushNamed(context, '/coins'),
                                 child: Container(
+                                  height:
+                                      38, // Same height as notification container
                                   margin: const EdgeInsets.only(right: 8),
                                   padding: const EdgeInsets.symmetric(
-                                      horizontal: 10, vertical: 7),
+                                      horizontal: 10,
+                                      vertical:
+                                          0), // Removed vertical padding since height is fixed
                                   decoration: BoxDecoration(
                                     color:
                                         const Color.fromARGB(255, 226, 226, 226)
                                             .withValues(alpha: 0.22),
-                                    borderRadius: BorderRadius.circular(20),
+                                    borderRadius: BorderRadius.circular(
+                                        11), // Same border radius as notification
                                     border: Border.all(
-                                        color:
-                                            const Color.fromARGB(255, 0, 0, 0)
-                                                .withValues(alpha: 0.4)),
+                                        color: const Color.fromARGB(
+                                                255, 255, 255, 255)
+                                            .withValues(alpha: 0.4)),
                                   ),
                                   child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        const Icon(Icons.stars_rounded,
-                                            color: Color.fromARGB(255, 0, 0, 0),
-                                            size: 15),
-                                        const SizedBox(width: 5),
-                                        Text(
-                                          '${auth.user?.coinBalance ?? 0} Coins',
-                                          style: const TextStyle(
-                                            color: Color.fromARGB(255, 0, 0, 0),
-                                            fontWeight: FontWeight.w800,
-                                            fontSize: 12,
-                                          ),
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(Icons.stars_rounded,
+                                          color:
+                                              Color.fromARGB(255, 237, 191, 7),
+                                          size: 15),
+                                      const SizedBox(width: 5),
+                                      Text(
+                                        '${auth.user?.coinBalance ?? 0} Coins',
+                                        style: const TextStyle(
+                                          color: Color.fromARGB(
+                                              255, 255, 255, 255),
+                                          fontWeight: FontWeight.w800,
+                                          fontSize: 12,
                                         ),
-                                      ]),
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ),
                               // Notifications
@@ -308,20 +317,18 @@ class _HomeContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final activeOrder = context.watch<OrderProvider>().activeOrder;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const SizedBox(height: 20),
+        const SizedBox(height: 16),
+        // ── Active Order Banner ──────────────────────────────
+        if (activeOrder != null) ...[
+          _ActiveOrderBanner(order: activeOrder),
+          const SizedBox(height: 16),
+        ],
         const _PromoBannerSlider(),
         const SizedBox(height: 20),
-
-        // ── Coin balance card ────────────────────────────────────────
-        if (auth.user != null)
-          _CoinCard(
-            coinBalance: auth.user!.coinBalance,
-            onTap: () => Navigator.pushNamed(context, '/coins'),
-          ),
-        if (auth.user != null) const SizedBox(height: 20),
 
         if (menu.categories.isNotEmpty) ...[
           Padding(
@@ -424,111 +431,6 @@ class _HomeContent extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-// ─── COIN CARD ─────────────────────────────────────────────────────
-
-class _CoinCard extends StatelessWidget {
-  final int coinBalance;
-  final VoidCallback onTap;
-
-  const _CoinCard({required this.coinBalance, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 20),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [
-              Color.fromARGB(255, 255, 255, 255),
-              Color.fromARGB(255, 255, 255, 255)
-            ],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: const Color.fromARGB(255, 255, 148, 109)
-                  .withValues(alpha: 0.35),
-              blurRadius: 12,
-              offset: const Offset(0, 5),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color:
-                    const Color.fromARGB(255, 0, 0, 0).withValues(alpha: 0.2),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.stars_rounded,
-                color: Color.fromARGB(255, 0, 0, 0),
-                size: 26,
-              ),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '$coinBalance Coins',
-                    style: const TextStyle(
-                      color: Color.fromARGB(255, 0, 0, 0),
-                      fontWeight: FontWeight.w900,
-                      fontSize: 20,
-                    ),
-                  ),
-                  Text(
-                    coinBalance > 0
-                        ? 'Worth ₹$coinBalance  ·  Use at checkout'
-                        : 'Earn 1 coin per ₹10 spent',
-                    style: TextStyle(
-                      color: const Color.fromARGB(255, 0, 0, 0)
-                          .withValues(alpha: 0.85),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color:
-                    const Color.fromARGB(255, 0, 0, 0).withValues(alpha: 0.25),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Row(mainAxisSize: MainAxisSize.min, children: [
-                Text(
-                  coinBalance > 0 ? 'View' : 'Earn',
-                  style: const TextStyle(
-                    color: Color.fromARGB(255, 0, 0, 0),
-                    fontWeight: FontWeight.w800,
-                    fontSize: 12,
-                  ),
-                ),
-                const SizedBox(width: 4),
-                const Icon(Icons.arrow_forward_ios_rounded,
-                    color: Color.fromARGB(255, 0, 0, 0), size: 11),
-              ]),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }
@@ -934,6 +836,218 @@ class _HomeShimmer extends StatelessWidget {
                             ),
                           ),
                         ))),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── ACTIVE ORDER BANNER ─────────────────────────────────────────
+
+class _ActiveOrderBanner extends StatefulWidget {
+  final Order order;
+  const _ActiveOrderBanner({required this.order});
+  @override
+  State<_ActiveOrderBanner> createState() => _ActiveOrderBannerState();
+}
+
+class _ActiveOrderBannerState extends State<_ActiveOrderBanner>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _pulse;
+  late Animation<double> _pulseAnim;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulse = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 1400))
+      ..repeat(reverse: true);
+    _pulseAnim = Tween<double>(begin: 0.85, end: 1.0).animate(_pulse);
+  }
+
+  @override
+  void dispose() {
+    _pulse.dispose();
+    super.dispose();
+  }
+
+  // Map status -> (label, icon, gradient colors)
+  (String, IconData, List<Color>) _statusInfo(String status) {
+    switch (status) {
+      case 'pending':
+        return (
+          'Order Received',
+          Icons.hourglass_top_rounded,
+          [const Color(0xFFB45309), const Color(0xFFF59E0B)]
+        );
+      case 'confirmed':
+        return (
+          'Order Confirmed',
+          Icons.check_circle_outline_rounded,
+          [const Color(0xFF1D4ED8), const Color(0xFF3B82F6)]
+        );
+      case 'preparing':
+        return (
+          'Being Prepared',
+          Icons.local_fire_department_rounded,
+          [const Color(0xFF991B1B), const Color(0xFFEF4444)]
+        );
+      case 'out_for_delivery':
+        return (
+          'Out for Delivery',
+          Icons.delivery_dining_rounded,
+          [const Color(0xFF065F46), const Color(0xFF10B981)]
+        );
+      default:
+        return (
+          'Processing',
+          Icons.info_outline_rounded,
+          [const Color(0xFF4B5563), const Color(0xFF6B7280)]
+        );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final order = widget.order;
+    final (statusLabel, statusIcon, gradColors) = _statusInfo(order.status);
+
+    // Summarize items (up to 2 names + count)
+    final itemNames = order.items.take(2).map((i) => i.productName).join(', ');
+    final extraCount = order.items.length - 2;
+    final itemSummary =
+        extraCount > 0 ? '$itemNames +$extraCount more' : itemNames;
+
+    return GestureDetector(
+      onTap: () =>
+          Navigator.pushNamed(context, '/order-detail', arguments: order.id),
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 16),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: gradColors,
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: gradColors.last.withValues(alpha: 0.35),
+              blurRadius: 16,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+        child: Stack(
+          clipBehavior: Clip.hardEdge,
+          children: [
+            // Decorative bg circle
+            Positioned(
+              right: -24,
+              top: -24,
+              child: Container(
+                width: 130,
+                height: 130,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white.withValues(alpha: 0.08),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+              child: Row(
+                children: [
+                  // Pulsing status icon
+                  ScaleTransition(
+                    scale: _pulseAnim,
+                    child: Container(
+                      width: 52,
+                      height: 52,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.2),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(statusIcon, color: Colors.white, size: 28),
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  // Order info
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.22),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Text(
+                                statusLabel,
+                                style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w800),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 5),
+                        Text(
+                          order.orderNumber,
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w900),
+                        ),
+                        if (itemSummary.isNotEmpty) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            itemSummary,
+                            style: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.85),
+                                fontSize: 11,
+                                fontWeight: FontWeight.w500),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  // Amount + arrow
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        '₹${order.totalAmount.toStringAsFixed(0)}',
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w900),
+                      ),
+                      const SizedBox(height: 4),
+                      Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.22),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.arrow_forward_ios_rounded,
+                            color: Colors.white, size: 11),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
           ],
         ),
       ),

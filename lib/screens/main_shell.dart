@@ -10,7 +10,7 @@ import 'cart/cart_screen.dart';
 import 'orders/orders_screen.dart';
 import 'profile/profile_screen.dart';
 import '../widgets/feedback_dialog.dart';
-
+import 'package:shared_preferences/shared_preferences.dart';
 
 class MainShell extends StatefulWidget {
   final int initialTab;
@@ -38,11 +38,18 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkAuth();
       context.read<NotificationProvider>().load();
+      context.read<OrderProvider>().loadActiveOrder();
       _checkPendingReviews();
+      // Listen for session expiry events
+      context.read<AuthProvider>().addListener(_onAuthChanged);
     });
     
     _notifTimer = Timer.periodic(const Duration(minutes: 2), (_) {
-      if (mounted) context.read<NotificationProvider>().load();
+      if (mounted) {
+        context.read<NotificationProvider>().load();
+        // Periodically refresh active order status
+        context.read<OrderProvider>().loadActiveOrder();
+      }
     });
   }
 
@@ -54,19 +61,36 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
   }
 
   void _checkPendingReviews() async {
+    // Only show review dialog if user has NOT already reviewed the order
+    // getLatestUnreviewedDeliveredOrder already checks feedback == null
     final orderProvider = context.read<OrderProvider>();
     final order = await orderProvider.getLatestUnreviewedDeliveredOrder();
-    if (order != null && mounted) {
+    if (order != null && order.feedback == null && mounted) {
+      final prefs = await SharedPreferences.getInstance();
+      final shown = prefs.getStringList('dismissed_review_ids') ?? [];
+      if (shown.contains(order.id.toString())) return;
+
+      if (!context.mounted) return;
       FeedbackDialog.show(context, order, onSuccess: () {
-        context.read<AuthProvider>().refreshUser();
+        if (mounted) context.read<AuthProvider>().refreshUser();
       });
     }
   }
 
 
+  void _onAuthChanged() {
+    final auth = context.read<AuthProvider>();
+    if (auth.sessionExpired && mounted) {
+      auth.resetSessionExpired();
+      Navigator.pushNamedAndRemoveUntil(context, '/login', (r) => false);
+    }
+  }
+
   @override
   void dispose() {
     _notifTimer?.cancel();
+    // Remove auth listener safely
+    try { context.read<AuthProvider>().removeListener(_onAuthChanged); } catch (_) {}
     for (final c in _tabControllers) {
       c.dispose();
     }

@@ -1,3 +1,4 @@
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/providers.dart';
@@ -79,7 +80,7 @@ class _OrdersScreenState extends State<OrdersScreen>
   Widget _buildList(OrderProvider orders) {
     if (orders.loading) {
       return const Center(
-          child: CircularProgressIndicator(color: Color(AppColors.primary)));
+          child: PizzaSpinner(size: 40));
     }
     if (orders.orders.isEmpty) {
       return const EmptyState(

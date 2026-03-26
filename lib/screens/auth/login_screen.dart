@@ -340,7 +340,7 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
             ),
             child: _sending
                 ? const SizedBox(width: 22, height: 22,
-                child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
+                child: PizzaSpinner(size: 24, color: Colors.white))
                 : const Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
@@ -438,7 +438,7 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
             ),
             child: _verifying
                 ? const SizedBox(width: 22, height: 22,
-                child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
+                child: PizzaSpinner(size: 24, color: Colors.white))
                 : const Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [

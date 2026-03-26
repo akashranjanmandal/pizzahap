@@ -530,8 +530,7 @@ class LoadingOverlay extends StatelessWidget {
             Container(
               color: Colors.black26,
               child: const Center(
-                  child: CircularProgressIndicator(
-                      color: Color(AppColors.primary))),
+                  child: PizzaSpinner(size: 40)),
             ),
         ],
       );

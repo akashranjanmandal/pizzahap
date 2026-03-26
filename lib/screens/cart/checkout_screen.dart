@@ -747,8 +747,8 @@ class _PlaceOrderBar extends StatelessWidget {
               ? const SizedBox(
                   width: 22,
                   height: 22,
-                  child: CircularProgressIndicator(
-                      color: Colors.white, strokeWidth: 2.5))
+                  child: PizzaSpinner(
+                      color: Colors.white, size: 24))
               : Row(mainAxisAlignment: MainAxisAlignment.center, children: [
                   Icon(
                       paymentMethod == 'cash_on_delivery'

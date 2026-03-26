@@ -1,3 +1,4 @@
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:geolocator/geolocator.dart';
@@ -188,8 +189,7 @@ class _BranchSelectionScreenState extends State<BranchSelectionScreen> {
                             const SizedBox(
                               width: 15,
                               height: 15,
-                              child: CircularProgressIndicator(
-                                  color: Colors.white, strokeWidth: 2),
+                              child: PizzaSpinner(size: 20, color: Colors.white),
                             )
                           else
                             Icon(
@@ -265,8 +265,7 @@ class _BranchSelectionScreenState extends State<BranchSelectionScreen> {
             Expanded(
               child: _loading
                   ? const Center(
-                      child: CircularProgressIndicator(
-                          color: Color(AppColors.primary)))
+                      child: PizzaSpinner(size: 40))
                   : _locations.isEmpty
                       ? Center(
                           child: Column(

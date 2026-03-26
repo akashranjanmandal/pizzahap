@@ -510,7 +510,7 @@ class _RegisterScreenState extends State<RegisterScreen> with TickerProviderStat
       ),
       child: loading
           ? const SizedBox(width: 22, height: 22,
-          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
+          child: PizzaSpinner(size: 24, color: Colors.white))
           : Text(label,
           style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800,
               color: Colors.white)),

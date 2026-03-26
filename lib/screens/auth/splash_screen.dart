@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../config/app_config.dart';
 import '../../providers/providers.dart';
+import '../../widgets/app_loader.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -27,10 +28,10 @@ class _SplashScreenState extends State<SplashScreen>
   @override
   void initState() {
     super.initState();
-    // Force status bar transparent with light icons on dark bg
+    // Force status bar dark icons on white bg
     SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
-      statusBarIconBrightness: Brightness.light,
+      statusBarIconBrightness: Brightness.dark,
     ));
 
     _bgController = AnimationController(
@@ -64,14 +65,18 @@ class _SplashScreenState extends State<SplashScreen>
   }
 
   Future<void> _runSequence() async {
+    if (!mounted) return;
     // BG fades in instantly to cover the native splash
     await _bgController.forward();
+    if (!mounted) return;
     // Logo bounces in
     _logoController.forward();
     await Future.delayed(const Duration(milliseconds: 450));
+    if (!mounted) return;
     // App name slides up
     _textController.forward();
     await Future.delayed(const Duration(milliseconds: 250));
+    if (!mounted) return;
     // Loader appears
     _loaderController.forward();
   }
@@ -117,28 +122,17 @@ class _SplashScreenState extends State<SplashScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // Scaffold bg matches the gradient so there's no white flash
-      backgroundColor: const Color(AppColors.primaryDark),
+      // White background as requested
+      backgroundColor: Colors.white,
       body: FadeTransition(
         opacity: _bgOpacity,
         child: Container(
           width: double.infinity,
           height: double.infinity,
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                Color(AppColors.primaryDark),
-                Color(AppColors.primary),
-                Color(AppColors.primaryLight),
-              ],
-              stops: [0.0, 0.55, 1.0],
-            ),
-          ),
+          color: Colors.white,
           child: Stack(
             children: [
-              // Decorative circles  subtle depth
+              // Subtle decorative accent — soft brand colored circles
               Positioned(
                 top: -80,
                 right: -60,
@@ -147,7 +141,7 @@ class _SplashScreenState extends State<SplashScreen>
                   height: 240,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: Colors.white.withValues(alpha: 0.05),
+                    color: const Color(AppColors.primary).withValues(alpha: 0.06),
                   ),
                 ),
               ),
@@ -159,19 +153,7 @@ class _SplashScreenState extends State<SplashScreen>
                   height: 300,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: Colors.white.withValues(alpha: 0.04),
-                  ),
-                ),
-              ),
-              Positioned(
-                top: 120,
-                left: -30,
-                child: Container(
-                  width: 140,
-                  height: 140,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Colors.white.withValues(alpha: 0.03),
+                    color: const Color(AppColors.primary).withValues(alpha: 0.04),
                   ),
                 ),
               ),
@@ -191,37 +173,15 @@ class _SplashScreenState extends State<SplashScreen>
                           child: child,
                         ),
                       ),
-                      child: Container(
-                        width: 128,
-                        height: 128,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(32),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.3),
-                              blurRadius: 32,
-                              offset: const Offset(0, 12),
-                            ),
-                            BoxShadow(
-                              color: Colors.white.withValues(alpha: 0.15),
-                              blurRadius: 2,
-                              offset: const Offset(0, -1),
-                            ),
-                          ],
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.all(24),
-                          child: Image.asset(
-                            'assets/images/logo.png',
-                            fit: BoxFit.contain,
-                            errorBuilder: (_, __, ___) => const Center(
-                              child: Icon(
-                                Icons.local_pizza_rounded,
-                                size: 72,
-                                color: Color(AppColors.primary),
-                              ),
-                            ),
+                      child: Image.asset(
+                        'assets/images/logo.png',
+                        width: double.infinity,
+                        fit: BoxFit.contain,
+                        errorBuilder: (_, __, ___) => const Center(
+                          child: Icon(
+                            Icons.local_pizza_rounded,
+                            size: 120,
+                            color: Color(AppColors.primary),
                           ),
                         ),
                       ),
@@ -239,7 +199,7 @@ class _SplashScreenState extends State<SplashScreen>
                             const Text(
                               AppConfig.appName,
                               style: TextStyle(
-                                color: Colors.white,
+                                color: Color(AppColors.primary),
                                 fontSize: 42,
                                 fontWeight: FontWeight.w900,
                                 letterSpacing: -1.0,
@@ -250,7 +210,7 @@ class _SplashScreenState extends State<SplashScreen>
                             Text(
                               'Hot, fresh & delivered with love',
                               style: TextStyle(
-                                color: Colors.white.withValues(alpha: 0.75),
+                                color: Colors.grey.shade600,
                                 fontSize: 15,
                                 fontWeight: FontWeight.w500,
                                 letterSpacing: 0.2,
@@ -266,7 +226,7 @@ class _SplashScreenState extends State<SplashScreen>
                     // Loader
                     FadeTransition(
                       opacity: _loaderFade,
-                      child: _SplashLoader(),
+                      child: const PizzaSpinner(size: 40),
                     ),
                   ],
                 ),
@@ -283,7 +243,7 @@ class _SplashScreenState extends State<SplashScreen>
                     'Developed by GOBT',
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.45),
+                      color: Colors.grey.shade400,
                       fontSize: 12,
                       fontWeight: FontWeight.w500,
                       letterSpacing: 0.3,
@@ -299,43 +259,3 @@ class _SplashScreenState extends State<SplashScreen>
   }
 }
 
-/// Spinning ring loader matching the brand
-class _SplashLoader extends StatefulWidget {
-  @override
-  State<_SplashLoader> createState() => _SplashLoaderState();
-}
-
-class _SplashLoaderState extends State<_SplashLoader>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _spin;
-
-  @override
-  void initState() {
-    super.initState();
-    _spin = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 1000))
-      ..repeat();
-  }
-
-  @override
-  void dispose() {
-    _spin.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return RotationTransition(
-      turns: _spin,
-      child: SizedBox(
-        width: 30,
-        height: 30,
-        child: CircularProgressIndicator(
-          color: Colors.white.withValues(alpha: 0.85),
-          strokeWidth: 2.8,
-          backgroundColor: Colors.white.withValues(alpha: 0.15),
-        ),
-      ),
-    );
-  }
-}

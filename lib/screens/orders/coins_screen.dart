@@ -1,3 +1,4 @@
+import 'package:pizzahap/widgets/app_loader.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/providers.dart';
@@ -62,7 +63,7 @@ class _CoinsScreenState extends State<CoinsScreen> {
       backgroundColor: const Color(AppColors.background),
       appBar: AppBar(title: const Text('My Coins')),
       body: coins.loading
-        ? const Center(child: CircularProgressIndicator(color: Color(AppColors.coins)))
+        ? const Center(child: PizzaSpinner(size: 40, color: Color(AppColors.coins)))
         : RefreshIndicator(
             color: const Color(AppColors.coins),
             onRefresh: () => context.read<CoinsProvider>().load(),

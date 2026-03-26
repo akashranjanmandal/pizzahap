@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/models.dart';
 import '../services/api_service.dart';
 import '../config/app_config.dart';
@@ -148,7 +149,16 @@ class _FeedbackDialogState extends State<FeedbackDialog> {
       ])),
       actions: [
         TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () async {
+              final prefs = await SharedPreferences.getInstance();
+              final shown = prefs.getStringList('dismissed_review_ids') ?? [];
+              if (!shown.contains(widget.order.id.toString())) {
+                shown.add(widget.order.id.toString());
+                await prefs.setStringList('dismissed_review_ids', shown);
+              }
+              if (!mounted) return;
+              Navigator.pop(context);
+            },
             child: const Text('Maybe Later')),
         ElevatedButton(
           onPressed: _loading ? null : () async {
@@ -170,17 +180,24 @@ class _FeedbackDialogState extends State<FeedbackDialog> {
                     ? null
                     : _commentCtrl.text.trim(),
               );
-              if (!context.mounted) return;
+              if (!mounted) return;
+              final prefs = await SharedPreferences.getInstance();
+              final shown = prefs.getStringList('dismissed_review_ids') ?? [];
+              if (!shown.contains(widget.order.id.toString())) {
+                shown.add(widget.order.id.toString());
+                await prefs.setStringList('dismissed_review_ids', shown);
+              }
+              if (!mounted) return;
               Navigator.pop(context);
-              if (context.mounted) _showThankYouAnimation();
+              _showThankYouAnimation();
               if (widget.onSuccess != null) widget.onSuccess!();
             } on ApiException catch (e) {
-              if (context.mounted) {
+              if (mounted) {
                 setState(() => _loading = false);
                 AppToast.error(context, e.message);
               }
             } catch (e) {
-              if (context.mounted) {
+              if (mounted) {
                 setState(() => _loading = false);
                 AppToast.error(context, e.toString());
               }
@@ -190,7 +207,7 @@ class _FeedbackDialogState extends State<FeedbackDialog> {
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           ),
           child: _loading 
-            ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+            ? const SizedBox(width: 20, height: 20, child: PizzaSpinner(size: 20, color: Colors.white))
             : const Text('Submit'),
         ),
       ],
@@ -198,19 +215,22 @@ class _FeedbackDialogState extends State<FeedbackDialog> {
   }
 
   Widget _starRow({required int rating, required ValueChanged<int> onChanged}) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: List.generate(5, (i) {
-        final star = i + 1;
-        return IconButton(
-          onPressed: () => onChanged(star),
-          icon: Icon(
-            star <= rating ? Icons.star_rounded : Icons.star_outline_rounded,
-            color: const Color(AppColors.warning),
-            size: 32,
-          ),
-        );
-      }),
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: List.generate(5, (i) {
+          final star = i + 1;
+          return IconButton(
+            onPressed: () => onChanged(star),
+            icon: Icon(
+              star <= rating ? Icons.star_rounded : Icons.star_outline_rounded,
+              color: const Color(AppColors.warning),
+              size: 32,
+            ),
+          );
+        }),
+      ),
     );
   }
 }

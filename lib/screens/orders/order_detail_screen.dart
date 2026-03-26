@@ -1,3 +1,4 @@
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/providers.dart';
@@ -124,7 +125,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       return const Scaffold(
           body: Center(
               child:
-                  CircularProgressIndicator(color: Color(AppColors.primary))));
+                  PizzaSpinner(size: 40)));
     }
     final order = provider.currentOrder;
     if (order == null) {
