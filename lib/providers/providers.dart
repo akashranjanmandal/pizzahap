@@ -274,6 +274,7 @@ class MenuProvider extends ChangeNotifier {
     } finally { _loading = false; notifyListeners(); }
   }
 
+
   Future<void> loadProducts({int? categoryId, bool? isVeg, String? search}) async {
     _loading = true; _error = null;
     _selectedCategoryId = categoryId;
@@ -331,27 +332,47 @@ class OrderProvider extends ChangeNotifier {
     } finally { _loading = false; notifyListeners(); }
   }
 
-  Future<void> loadOrder(int id) async {
+  Future<Order?> loadOrder(int id) async {
     _loading = true; _error = null; notifyListeners();
     try {
       _currentOrder = await ApiService.getOrder(id);
+      return _currentOrder;
     } on ApiException catch (e) {
       _error = e.message;
+      return null;
     } catch (e) {
       _error = e.toString().replaceAll("Exception: ", "");
+      return null;
     } finally { _loading = false; notifyListeners(); }
+  }
+
+
+  Future<Order?> getLatestUnreviewedDeliveredOrder() async {
+    try {
+      final res = await ApiService.getOrders(status: 'delivered');
+      final orders = res['orders'] as List<Order>;
+      // Find the first order that is delivered but has NO feedback recorded.
+      for (final o in orders) {
+        if (o.isDelivered && o.feedback == null) return o;
+      }
+    } catch (_) {}
+    return null;
   }
 
   Future<Map<String, dynamic>?> placeOrder(Map<String, dynamic> data) async {
     _loading = true; _error = null; notifyListeners();
     try {
       return await ApiService.placeOrder(data);
-    } on ApiException catch (e) {
-      _error = e.message; return null;
     } catch (e) {
-      _error = e.toString().replaceAll("Exception: ", ""); return null;
+      if (e is ApiException) {
+        _error = e.message;
+      } else {
+        _error = e.toString().replaceAll("Exception: ", "");
+      }
+      return null;
     } finally { _loading = false; notifyListeners(); }
   }
+
 
   Future<bool> cancelOrder(int id, {String? reason}) async {
     try {

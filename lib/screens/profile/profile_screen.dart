@@ -225,7 +225,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                             ),
                             child:
                                 Row(mainAxisSize: MainAxisSize.min, children: [
-                              const Icon(Icons.monetization_on_rounded,
+                              const Icon(Icons.stars_rounded,
                                   color: Color(AppColors.coins), size: 20),
                               const SizedBox(width: 8),
                               Text('${user.coinBalance} Coins',
@@ -295,7 +295,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                     _menuCard([
                       _menuItem(Icons.receipt_long_rounded, 'My Orders',
                           () => Navigator.pushNamed(context, '/orders')),
-                      _menuItem(Icons.monetization_on_rounded, 'My Coins',
+                      _menuItem(Icons.stars_rounded, 'My Coins',
                           () => Navigator.pushNamed(context, '/coins'),
                           trailing: user.coinBalance > 0
                               ? _coinBadge(user.coinBalance)

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/providers.dart';
 import '../../config/app_config.dart';
+import '../../widgets/feedback_dialog.dart';
 import '../../services/api_service.dart';
 import '../../widgets/widgets.dart';
 import '../../models/models.dart';
@@ -17,8 +18,15 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<OrderProvider>().loadOrder(widget.orderId);
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final order =
+          await context.read<OrderProvider>().loadOrder(widget.orderId);
+      if (mounted &&
+          order != null &&
+          order.isDelivered &&
+          order.feedback == null) {
+        _showFeedbackDialog(order);
+      }
     });
   }
 
@@ -103,83 +111,10 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   }
 
   void _showFeedbackDialog(Order order) {
-    int foodRating = 0, deliveryRating = 0, overallRating = 0;
-    final commentCtrl = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-          builder: (ctx, setDlgState) => AlertDialog(
-                title: const Text('Rate Your Order'),
-                content: SingleChildScrollView(
-                    child: Column(mainAxisSize: MainAxisSize.min, children: [
-                  const Text('Food Quality',
-                      style: TextStyle(fontWeight: FontWeight.w700)),
-                  _StarRow(
-                      rating: foodRating,
-                      onChanged: (r) => setDlgState(() => foodRating = r)),
-                  const SizedBox(height: 12),
-                  if (order.deliveryType == 'delivery') ...[
-                    const Text('Delivery',
-                        style: TextStyle(fontWeight: FontWeight.w700)),
-                    _StarRow(
-                        rating: deliveryRating,
-                        onChanged: (r) =>
-                            setDlgState(() => deliveryRating = r)),
-                    const SizedBox(height: 12),
-                  ],
-                  const Text('Overall',
-                      style: TextStyle(fontWeight: FontWeight.w700)),
-                  _StarRow(
-                      rating: overallRating,
-                      onChanged: (r) => setDlgState(() => overallRating = r)),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: commentCtrl,
-                    maxLines: 3,
-                    decoration: const InputDecoration(
-                        hintText: 'Leave a comment... (optional)',
-                        border: OutlineInputBorder()),
-                  ),
-                ])),
-                actions: [
-                  TextButton(
-                      onPressed: () => Navigator.pop(ctx),
-                      child: const Text('Cancel')),
-                  ElevatedButton(
-                    onPressed: () async {
-                      if (foodRating == 0 || overallRating == 0) {
-                        AppToast.error(context,
-                            'Please rate food quality and overall experience');
-                        return;
-                      }
-                      Navigator.pop(ctx);
-                      try {
-                        await ApiService.submitOrderFeedback(
-                          order.id,
-                          foodRating: foodRating,
-                          deliveryRating: order.deliveryType == 'delivery' &&
-                                  deliveryRating > 0
-                              ? deliveryRating
-                              : null,
-                          overallRating: overallRating,
-                          comment: commentCtrl.text.trim().isEmpty
-                              ? null
-                              : commentCtrl.text.trim(),
-                        );
-                        if (!mounted) return;
-                        AppToast.success(
-                            context, 'Thank you for your feedback!');
-                        context.read<OrderProvider>().loadOrder(order.id);
-                      } on ApiException catch (e) {
-                        if (!mounted) return;
-                        AppToast.error(context, e.message);
-                      }
-                    },
-                    child: const Text('Submit'),
-                  ),
-                ],
-              )),
-    );
+    FeedbackDialog.show(context, order, onSuccess: () {
+      context.read<OrderProvider>().loadOrder(order.id);
+      context.read<AuthProvider>().refreshUser();
+    });
   }
 
   @override
@@ -199,338 +134,388 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     final isCancelled = order.status == 'cancelled';
     final currentStep = isCancelled ? -1 : _stepIndex(order.status);
 
-    return Scaffold(
-      backgroundColor: const Color(AppColors.background),
-      floatingActionButton: const CartFAB(),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
-      appBar: AppBar(
-        title: Text(order.orderNumber),
-        actions: [
-          if (order.isDelivered)
-            TextButton(
-              onPressed: () => _reorder(order),
-              child: const Text('Reorder',
-                  style: TextStyle(
-                      color: Color(AppColors.primary),
-                      fontWeight: FontWeight.w700)),
-            ),
-        ],
-      ),
-      body: RefreshIndicator(
-        color: const Color(AppColors.primary),
-        onRefresh: () =>
-            context.read<OrderProvider>().loadOrder(widget.orderId),
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            // ── Status card ─────────────────────────────────────
-            _card(
-                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                const Text('Order Status',
-                    style:
-                        TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
-                OrderStatusChip(status: order.status),
-              ]),
-              // Payment status badge
-              const SizedBox(height: 8),
-              Row(children: [
-                Icon(
-                  order.isCOD
-                      ? Icons.payments_outlined
-                      : Icons.credit_card_outlined,
-                  size: 14,
-                  color: Colors.grey.shade500,
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  order.isCOD ? 'Cash on Delivery' : 'Online Payment',
-                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-                ),
-                const SizedBox(width: 8),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: order.isPaid
-                        ? const Color(AppColors.success).withValues(alpha: 0.12)
-                        : const Color(AppColors.warning).withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    order.isPaid ? 'Paid' : order.paymentStatus.toUpperCase(),
+    return PopScope(
+      canPop: Navigator.canPop(context),
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        Navigator.pushNamedAndRemoveUntil(context, '/home', (r) => false);
+      },
+      child: Scaffold(
+        backgroundColor: const Color(AppColors.background),
+        floatingActionButton: const CartFAB(),
+        floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+        appBar: AppBar(
+          title: Text(order.orderNumber),
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_rounded),
+            onPressed: () {
+              if (Navigator.canPop(context)) {
+                Navigator.pop(context);
+              } else {
+                Navigator.pushNamedAndRemoveUntil(
+                    context, '/home', (r) => false);
+              }
+            },
+          ),
+          actions: [
+            if (order.isDelivered)
+              TextButton(
+                onPressed: () => _reorder(order),
+                child: const Text('Reorder',
                     style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: order.isPaid
-                          ? const Color(AppColors.success)
-                          : const Color(AppColors.warning),
-                    ),
-                  ),
-                ),
-              ]),
-              if (!isCancelled) ...[
-                const SizedBox(height: 20),
-                ...List.generate(_statusSteps.length, (i) {
-                  final done = i <= currentStep;
-                  final active = i == currentStep;
-                  return Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Column(children: [
-                          Container(
-                            width: 28,
-                            height: 28,
-                            decoration: BoxDecoration(
-                              color: done
-                                  ? const Color(AppColors.primary)
-                                  : Colors.grey.shade200,
-                              shape: BoxShape.circle,
-                            ),
-                            child: Center(
-                                child: done
-                                    ? const Icon(Icons.check,
-                                        color: Colors.white, size: 16)
-                                    : Text('${i + 1}',
-                                        style: TextStyle(
-                                            color: Colors.grey.shade500,
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.w700))),
-                          ),
-                          if (i < _statusSteps.length - 1)
-                            Container(
-                                width: 2,
-                                height: 28,
-                                color: done && i < currentStep
-                                    ? const Color(AppColors.primary)
-                                    : Colors.grey.shade200),
-                        ]),
-                        const SizedBox(width: 12),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 4),
-                          child: Text(_stepLabel(_statusSteps[i]),
-                              style: TextStyle(
-                                fontWeight:
-                                    active ? FontWeight.w800 : FontWeight.w500,
-                                fontSize: active ? 15 : 13,
-                                color: done
-                                    ? const Color(AppColors.textPrimary)
-                                    : Colors.grey.shade400,
-                              )),
-                        ),
-                      ]);
-                }),
-              ],
-            ])),
-            const SizedBox(height: 12),
-
-            // ── Coins info ───────────────────────────────────────
-            if (order.coinsRedeemed > 0 || order.coinsEarned > 0)
-              _card(Row(children: [
-                const Icon(Icons.monetization_on_rounded,
-                    color: Color(AppColors.coins), size: 20),
-                const SizedBox(width: 10),
-                Expanded(
-                    child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                        color: Color(AppColors.primary),
+                        fontWeight: FontWeight.w700)),
+              ),
+          ],
+        ),
+        body: RefreshIndicator(
+          color: const Color(AppColors.primary),
+          onRefresh: () =>
+              context.read<OrderProvider>().loadOrder(widget.orderId),
+          child: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              // ── Status card ─────────────────────────────────────
+              _card(Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                      if (order.coinsRedeemed > 0)
-                        Text(
-                            '${order.coinsRedeemed} coins redeemed (₹${order.coinsRedeemed} off)',
-                            style: const TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: Color(AppColors.coins))),
-                      if (order.coinsEarned > 0)
-                        Text('${order.coinsEarned} coins earned on this order',
-                            style: const TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: Color(AppColors.success))),
-                      if (order.coinsEarned == 0 && order.isDelivered)
-                        Text('Coins will be credited after delivery',
-                            style: TextStyle(
-                                fontSize: 12, color: Colors.grey.shade500)),
-                    ])),
-              ])),
-            if (order.coinsRedeemed > 0 || order.coinsEarned > 0)
-              const SizedBox(height: 12),
-
-            // ── Items ────────────────────────────────────────────
-            _card(
-                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const Text('Items Ordered',
-                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
-              const SizedBox(height: 12),
-              ...order.items.map((item) => Padding(
-                    padding: const EdgeInsets.only(bottom: 10),
-                    child: Row(children: [
-                      PizzaNetImage(
-                          url: item.imageUrl,
-                          width: 56,
-                          height: 56,
-                          borderRadius: BorderRadius.circular(8)),
-                      const SizedBox(width: 10),
-                      Expanded(
-                          child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                            Text(item.productName,
-                                style: const TextStyle(
-                                    fontWeight: FontWeight.w700, fontSize: 13)),
-                            Text(
-                                '${item.sizeName}${item.crustName != null ? '  ${item.crustName}' : ''} × ${item.quantity}',
-                                style: TextStyle(
-                                    fontSize: 12, color: Colors.grey.shade500)),
-                            if ((item.toppings).isNotEmpty)
-                              Text(
-                                  '+ ${(item.toppings).map((t) => t['topping_name'] ?? t['name'] ?? '').join(', ')}',
-                                  style: TextStyle(
-                                      fontSize: 11,
-                                      color: Colors.grey.shade400)),
-                          ])),
-                      Text('₹${item.totalPrice.toStringAsFixed(0)}',
-                          style: const TextStyle(
-                              fontWeight: FontWeight.w700, fontSize: 14)),
-                    ]),
-                  )),
-            ])),
-            const SizedBox(height: 12),
-
-            // ── Bill ─────────────────────────────────────────────
-            _card(
-                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const Text('Bill Details',
-                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
-              const SizedBox(height: 12),
-              PriceRow(label: 'Subtotal', amount: order.subtotal),
-              if (order.discountAmount > 0) ...[
-                const SizedBox(height: 6),
-                PriceRow(
-                    label: 'Coupon Discount',
-                    amount: -order.discountAmount,
-                    color: const Color(AppColors.success)),
-              ],
-              if (order.coinsRedeemed > 0) ...[
-                const SizedBox(height: 6),
-                PriceRow(
-                    label: 'Coins Redeemed',
-                    amount: -order.coinsRedeemed.toDouble(),
-                    color: const Color(AppColors.coins)),
-              ],
-              const SizedBox(height: 6),
-              PriceRow(label: 'Delivery Fee', amount: order.deliveryFee),
-              const SizedBox(height: 6),
-              PriceRow(label: 'Tax (5%)', amount: order.taxAmount),
-              const Divider(height: 16),
-              PriceRow(
-                  label: 'Total Paid', amount: order.totalAmount, isBold: true),
-            ])),
-            const SizedBox(height: 12),
-
-            // ── Delivery info ─────────────────────────────────────
-            _card(
-                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const Text('Delivery Info',
-                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
-              const SizedBox(height: 10),
-              if (order.locationName != null)
-                _infoRow(Icons.store_outlined, 'Branch', order.locationName!),
-              _infoRow(
-                  Icons.delivery_dining_outlined,
-                  'Type',
-                  order.deliveryType == 'delivery'
-                      ? 'Home Delivery'
-                      : 'Pickup'),
-              if (order.deliveryAddress != null)
-                _infoRow(Icons.location_on_outlined, 'Address',
-                    order.deliveryAddress!),
-              _infoRow(Icons.payment_outlined, 'Payment',
-                  order.isCOD ? 'Cash on Delivery' : 'Online'),
-            ])),
-
-            // ── Feedback ─────────────────────────────────────────
-            if (order.isDelivered) ...[
-              const SizedBox(height: 12),
-              order.feedback != null
-                  ? _card(Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                          const Text('Your Feedback',
+                          const Text('Order Status',
                               style: TextStyle(
                                   fontWeight: FontWeight.w800, fontSize: 15)),
-                          const SizedBox(height: 10),
-                          Row(children: [
-                            ...List.generate(
-                                5,
-                                (i) => Icon(
-                                    i < order.feedback!.overallRating
-                                        ? Icons.star_rounded
-                                        : Icons.star_outline_rounded,
-                                    color: const Color(AppColors.coins),
-                                    size: 22)),
-                            const SizedBox(width: 8),
-                            Text('${order.feedback!.overallRating}/5',
-                                style: const TextStyle(
-                                    fontWeight: FontWeight.w700)),
-                          ]),
-                          if (order.feedback!.comment != null) ...[
-                            const SizedBox(height: 6),
-                            Text(order.feedback!.comment!,
-                                style: TextStyle(
-                                    fontSize: 13, color: Colors.grey.shade700)),
-                          ],
-                        ]))
-                  : OutlinedButton.icon(
-                      icon: const Icon(Icons.star_outline_rounded),
-                      label: const Text('Rate This Order'),
-                      onPressed: () => _showFeedbackDialog(order),
-                      style: OutlinedButton.styleFrom(
-                          foregroundColor: const Color(AppColors.coins),
-                          side:
-                              const BorderSide(color: Color(AppColors.coins))),
-                    ),
-            ],
+                          OrderStatusChip(status: order.status),
+                        ]),
+                    // Payment status badge
+                    const SizedBox(height: 8),
+                    Row(children: [
+                      Icon(
+                        order.isCOD
+                            ? Icons.payments_outlined
+                            : Icons.credit_card_outlined,
+                        size: 14,
+                        color: Colors.grey.shade500,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        order.isCOD ? 'Cash on Delivery' : 'Online Payment',
+                        style: TextStyle(
+                            fontSize: 12, color: Colors.grey.shade600),
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: order.isPaid
+                              ? const Color(AppColors.success)
+                                  .withValues(alpha: 0.12)
+                              : const Color(AppColors.warning)
+                                  .withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          order.isPaid
+                              ? 'Paid'
+                              : order.paymentStatus.toUpperCase(),
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: order.isPaid
+                                ? const Color(AppColors.success)
+                                : const Color(AppColors.warning),
+                          ),
+                        ),
+                      ),
+                    ]),
+                    if (!isCancelled) ...[
+                      const SizedBox(height: 20),
+                      ...List.generate(_statusSteps.length, (i) {
+                        final done = i <= currentStep;
+                        final active = i == currentStep;
+                        return Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Column(children: [
+                                Container(
+                                  width: 28,
+                                  height: 28,
+                                  decoration: BoxDecoration(
+                                    color: done
+                                        ? const Color(AppColors.primary)
+                                        : Colors.grey.shade200,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Center(
+                                      child: done
+                                          ? const Icon(Icons.check,
+                                              color: Colors.white, size: 16)
+                                          : Text('${i + 1}',
+                                              style: TextStyle(
+                                                  color: Colors.grey.shade500,
+                                                  fontSize: 12,
+                                                  fontWeight:
+                                                      FontWeight.w700))),
+                                ),
+                                if (i < _statusSteps.length - 1)
+                                  Container(
+                                      width: 2,
+                                      height: 28,
+                                      color: done && i < currentStep
+                                          ? const Color(AppColors.primary)
+                                          : Colors.grey.shade200),
+                              ]),
+                              const SizedBox(width: 12),
+                              Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 4),
+                                child: Text(_stepLabel(_statusSteps[i]),
+                                    style: TextStyle(
+                                      fontWeight: active
+                                          ? FontWeight.w800
+                                          : FontWeight.w500,
+                                      fontSize: active ? 15 : 13,
+                                      color: done
+                                          ? const Color(AppColors.textPrimary)
+                                          : Colors.grey.shade400,
+                                    )),
+                              ),
+                            ]);
+                      }),
+                    ],
+                  ])),
+              const SizedBox(height: 12),
 
-            // ── Action buttons ────────────────────────────────────
-            if (order.isDelivered) ...[
+              // ── Coins info ───────────────────────────────────────
+              if (order.coinsRedeemed > 0 || order.coinsEarned > 0)
+                _card(Row(children: [
+                  const Icon(Icons.stars_rounded,
+                      color: Color(AppColors.coins), size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(
+                      child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                        if (order.coinsRedeemed > 0)
+                          Text(
+                              '${order.coinsRedeemed} coins redeemed (₹${order.coinsRedeemed} off)',
+                              style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(AppColors.coins))),
+                        if (order.coinsEarned > 0)
+                          Text(
+                            order.isDelivered
+                                ? '${order.coinsEarned} coins earned on this order'
+                                : '${order.coinsEarned} coins will be credited after delivery',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: order.isDelivered
+                                  ? const Color(AppColors.success)
+                                  : Colors.grey.shade600,
+                            ),
+                          ),
+                        if (order.coinsEarned == 0 && !order.isDelivered)
+                          Text('Coins will be credited after delivery',
+                              style: TextStyle(
+                                  fontSize: 12, color: Colors.grey.shade500)),
+                      ])),
+                ])),
+              if (order.coinsRedeemed > 0 ||
+                  order.coinsEarned > 0 ||
+                  (!order.isDelivered && !isCancelled))
+                const SizedBox(height: 12),
+
+              // ── Items ────────────────────────────────────────────
+              _card(Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Items Ordered',
+                        style: TextStyle(
+                            fontWeight: FontWeight.w800, fontSize: 15)),
+                    const SizedBox(height: 12),
+                    ...order.items.map((item) => Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: Row(children: [
+                            PizzaNetImage(
+                                url: item.imageUrl,
+                                width: 56,
+                                height: 56,
+                                borderRadius: BorderRadius.circular(8)),
+                            const SizedBox(width: 10),
+                            Expanded(
+                                child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                  Text(item.productName,
+                                      style: const TextStyle(
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 13)),
+                                  Text(
+                                      '${item.sizeName}${item.crustName != null ? '  ${item.crustName}' : ''} × ${item.quantity}',
+                                      style: TextStyle(
+                                          fontSize: 12,
+                                          color: Colors.grey.shade500)),
+                                  if ((item.toppings).isNotEmpty)
+                                    Text(
+                                        '+ ${(item.toppings).map((t) => t['topping_name'] ?? t['name'] ?? '').join(', ')}',
+                                        style: TextStyle(
+                                            fontSize: 11,
+                                            color: Colors.grey.shade400)),
+                                ])),
+                            Text('₹${item.totalPrice.toStringAsFixed(0)}',
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w700, fontSize: 14)),
+                          ]),
+                        )),
+                  ])),
               const SizedBox(height: 12),
-              Row(children: [
-                Expanded(
-                    child: OutlinedButton.icon(
-                  icon: const Icon(Icons.replay, size: 18),
-                  label: const Text('Reorder'),
-                  onPressed: () => _reorder(order),
-                )),
-                const SizedBox(width: 10),
-                Expanded(
-                    child: OutlinedButton.icon(
-                  icon: const Icon(Icons.currency_rupee, size: 18),
-                  label: const Text('Refund'),
-                  onPressed: () => _requestRefund(order),
+
+              // ── Bill ─────────────────────────────────────────────
+              _card(Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Bill Details',
+                        style: TextStyle(
+                            fontWeight: FontWeight.w800, fontSize: 15)),
+                    const SizedBox(height: 12),
+                    PriceRow(label: 'Subtotal', amount: order.subtotal),
+                    if (order.discountAmount > 0) ...[
+                      const SizedBox(height: 6),
+                      PriceRow(
+                          label: 'Coupon Discount',
+                          amount: -order.discountAmount,
+                          color: const Color(AppColors.success)),
+                    ],
+                    if (order.coinsRedeemed > 0) ...[
+                      const SizedBox(height: 6),
+                      PriceRow(
+                          label: 'Coins Redeemed',
+                          amount: -order.coinsRedeemed.toDouble(),
+                          color: const Color(AppColors.coins)),
+                    ],
+                    const SizedBox(height: 6),
+                    PriceRow(label: 'Delivery Fee', amount: order.deliveryFee),
+                    const Divider(height: 16),
+                    PriceRow(
+                        label: 'Total Paid',
+                        amount: order.totalAmount,
+                        isBold: true),
+                  ])),
+              const SizedBox(height: 12),
+
+              // ── Delivery info ─────────────────────────────────────
+              _card(Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Delivery Info',
+                        style: TextStyle(
+                            fontWeight: FontWeight.w800, fontSize: 15)),
+                    const SizedBox(height: 10),
+                    if (order.locationName != null)
+                      _infoRow(
+                          Icons.store_outlined, 'Branch', order.locationName!),
+                    _infoRow(
+                        Icons.delivery_dining_outlined,
+                        'Type',
+                        order.deliveryType == 'delivery'
+                            ? 'Home Delivery'
+                            : 'Pickup'),
+                    if (order.deliveryAddress != null)
+                      _infoRow(Icons.location_on_outlined, 'Address',
+                          order.deliveryAddress!),
+                    _infoRow(Icons.payment_outlined, 'Payment',
+                        order.isCOD ? 'Cash on Delivery' : 'Online'),
+                  ])),
+
+              // ── Feedback ─────────────────────────────────────────
+              if (order.isDelivered) ...[
+                const SizedBox(height: 12),
+                order.feedback != null
+                    ? _card(Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                            const Text('Your Feedback',
+                                style: TextStyle(
+                                    fontWeight: FontWeight.w800, fontSize: 15)),
+                            const SizedBox(height: 10),
+                            Row(children: [
+                              ...List.generate(
+                                  5,
+                                  (i) => Icon(
+                                      i < order.feedback!.overallRating
+                                          ? Icons.star_rounded
+                                          : Icons.star_outline_rounded,
+                                      color: const Color(AppColors.coins),
+                                      size: 22)),
+                              const SizedBox(width: 8),
+                              Text('${order.feedback!.overallRating}/5',
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w700)),
+                            ]),
+                            if (order.feedback!.comment != null) ...[
+                              const SizedBox(height: 6),
+                              Text(order.feedback!.comment!,
+                                  style: TextStyle(
+                                      fontSize: 13,
+                                      color: Colors.grey.shade700)),
+                            ],
+                          ]))
+                    : OutlinedButton.icon(
+                        icon: const Icon(Icons.star_outline_rounded),
+                        label: const Text('Rate This Order'),
+                        onPressed: () => _showFeedbackDialog(order),
+                        style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(AppColors.coins),
+                            side: const BorderSide(
+                                color: Color(AppColors.coins))),
+                      ),
+              ],
+
+              // ── Action buttons ────────────────────────────────────
+              if (order.isDelivered) ...[
+                const SizedBox(height: 12),
+                Row(children: [
+                  Expanded(
+                      child: OutlinedButton.icon(
+                    icon: const Icon(Icons.replay, size: 18),
+                    label: const Text('Reorder'),
+                    onPressed: () => _reorder(order),
+                  )),
+                  const SizedBox(width: 10),
+                  Expanded(
+                      child: OutlinedButton.icon(
+                    icon: const Icon(Icons.currency_rupee, size: 18),
+                    label: const Text('Refund'),
+                    onPressed: () => _requestRefund(order),
+                    style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(AppColors.warning)),
+                  )),
+                ]),
+              ],
+              if (order.canCancel) ...[
+                const SizedBox(height: 12),
+                OutlinedButton(
+                  onPressed: () async {
+                    final ok = await context
+                        .read<OrderProvider>()
+                        .cancelOrder(order.id);
+                    if (context.mounted && ok) {
+                      AppToast.success(context, 'Order cancelled');
+                    }
+                  },
                   style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(AppColors.warning)),
-                )),
-              ]),
+                      foregroundColor: const Color(AppColors.error),
+                      side: const BorderSide(color: Color(AppColors.error))),
+                  child: const Text('Cancel Order'),
+                ),
+              ],
+              const SizedBox(height: 32),
             ],
-            if (order.canCancel) ...[
-              const SizedBox(height: 12),
-              OutlinedButton(
-                onPressed: () async {
-                  final ok =
-                      await context.read<OrderProvider>().cancelOrder(order.id);
-                  if (context.mounted && ok) {
-                    AppToast.success(context, 'Order cancelled');
-                  }
-                },
-                style: OutlinedButton.styleFrom(
-                    foregroundColor: const Color(AppColors.error),
-                    side: const BorderSide(color: Color(AppColors.error))),
-                child: const Text('Cancel Order'),
-              ),
-            ],
-            const SizedBox(height: 32),
-          ],
+          ),
         ),
       ),
     );
@@ -542,7 +527,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
           color: Colors.white,
           borderRadius: BorderRadius.circular(14),
           boxShadow: [
-            BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8)
+            BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04), blurRadius: 8)
           ],
         ),
         child: child,
@@ -563,26 +549,4 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       );
 }
 
-// ── Star rating row widget ─────────────────────────────────────────
-class _StarRow extends StatelessWidget {
-  final int rating;
-  final ValueChanged<int> onChanged;
-  const _StarRow({required this.rating, required this.onChanged});
 
-  @override
-  Widget build(BuildContext context) => Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: List.generate(
-            5,
-            (i) => GestureDetector(
-                  onTap: () => onChanged(i + 1),
-                  child: Icon(
-                    i < rating
-                        ? Icons.star_rounded
-                        : Icons.star_outline_rounded,
-                    color: const Color(AppColors.coins),
-                    size: 32,
-                  ),
-                )),
-      );
-}

@@ -210,11 +210,11 @@ class _SplashScreenState extends State<SplashScreen>
                             ),
                           ],
                         ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(32),
+                        child: Padding(
+                          padding: const EdgeInsets.all(24),
                           child: Image.asset(
                             'assets/images/logo.png',
-                            fit: BoxFit.cover,
+                            fit: BoxFit.contain,
                             errorBuilder: (_, __, ___) => const Center(
                               child: Icon(
                                 Icons.local_pizza_rounded,

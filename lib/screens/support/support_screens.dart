@@ -147,7 +147,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       case 'refund':
         return Icons.assignment_return_rounded;
       case 'coins':
-        return Icons.monetization_on_rounded;
+        return Icons.stars_rounded;
       default:
         return Icons.notifications_rounded;
     }

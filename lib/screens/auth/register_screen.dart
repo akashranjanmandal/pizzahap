@@ -150,29 +150,35 @@ class _RegisterScreenState extends State<RegisterScreen> with TickerProviderStat
     final size = MediaQuery.of(context).size;
     final bottomPad = MediaQuery.of(context).viewPadding.bottom;
 
-    return Scaffold(
-      backgroundColor: const Color(AppColors.background),
-      resizeToAvoidBottomInset: true,
-      body: SingleChildScrollView(
-        physics: const ClampingScrollPhysics(),
-        child: ConstrainedBox(
-          constraints: BoxConstraints(minHeight: size.height),
-          child: Stack(
-            children: [
-              // Header gradient
-              Positioned(
-                top: 0, left: 0, right: 0,
-                child: Container(
-                  height: size.height * 0.38,
-                  decoration: const BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [Color(AppColors.primaryDark), Color(AppColors.primary)],
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        _prevStep();
+      },
+      child: Scaffold(
+        backgroundColor: const Color(AppColors.background),
+        resizeToAvoidBottomInset: true,
+        body: SingleChildScrollView(
+          physics: const ClampingScrollPhysics(),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: size.height),
+            child: Stack(
+              children: [
+                // Header gradient
+                Positioned(
+                  top: 0, left: 0, right: 0,
+                  child: Container(
+                    height: size.height * 0.38,
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [Color(AppColors.primaryDark), Color(AppColors.primary)],
+                      ),
                     ),
                   ),
                 ),
-              ),
               Positioned(
                 top: -40, right: -40,
                 child: Container(
@@ -304,7 +310,7 @@ class _RegisterScreenState extends State<RegisterScreen> with TickerProviderStat
           ),
         ),
       ),
-    );
+    ),);
   }
 
   // ─── STEP 0: Name ──────────────────────────────────────────────

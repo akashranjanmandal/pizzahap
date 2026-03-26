@@ -20,6 +20,7 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
   bool _sending = false;
   bool _verifying = false;
   String? _emailError;
+  int _resendSeconds = 0;
 
   late AnimationController _fadeCtrl;
   late AnimationController _slideCtrl;
@@ -73,10 +74,21 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
     if (ok) {
       setState(() { _otpSent = true; });
       _animateIn();
+      _startResendTimer();
       AppToast.success(context, 'OTP sent! Check your inbox');
     } else {
       AppToast.error(context, auth.error ?? 'Failed to send OTP');
     }
+  }
+
+  void _startResendTimer() {
+    setState(() => _resendSeconds = 30);
+    Future.doWhile(() async {
+      await Future.delayed(const Duration(seconds: 1));
+      if (!mounted) return false;
+      setState(() => _resendSeconds--);
+      return _resendSeconds > 0;
+    });
   }
 
   Future<void> _verifyOtp() async {
@@ -115,29 +127,41 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
     final size = MediaQuery.of(context).size;
     final bottomPad = MediaQuery.of(context).viewInsets.bottom;
 
-    return Scaffold(
-      backgroundColor: const Color(AppColors.background),
-      resizeToAvoidBottomInset: true,
-      body: SingleChildScrollView(
-        physics: const ClampingScrollPhysics(),
-        child: ConstrainedBox(
-          constraints: BoxConstraints(minHeight: size.height),
-          child: Stack(
-            children: [
-              // Top red half
-              Positioned(
-                top: 0, left: 0, right: 0,
-                child: Container(
-                  height: size.height * 0.45,
-                  decoration: const BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [Color(AppColors.primaryDark), Color(AppColors.primary)],
+    return PopScope(
+      canPop: !_otpSent,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        if (_otpSent) {
+          setState(() {
+            _otpSent = false;
+            _otpCtrl.clear();
+          });
+          _animateIn();
+        }
+      },
+      child: Scaffold(
+        backgroundColor: const Color(AppColors.background),
+        resizeToAvoidBottomInset: true,
+        body: SingleChildScrollView(
+          physics: const ClampingScrollPhysics(),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: size.height),
+            child: Stack(
+              children: [
+                // Top red half
+                Positioned(
+                  top: 0, left: 0, right: 0,
+                  child: Container(
+                    height: size.height * 0.45,
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [Color(AppColors.primaryDark), Color(AppColors.primary)],
+                      ),
                     ),
                   ),
                 ),
-              ),
               // Decorative circles on header
               Positioned(
                 top: -50, right: -50,
@@ -265,7 +289,7 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
           ),
         ),
       ),
-    );
+    ),);
   }
 
   Widget _buildEmailStep() {
@@ -337,15 +361,15 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Enter OTP',
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900,
+        const Text('Verify your email',
+            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900,
                 color: Color(AppColors.textPrimary))),
         const SizedBox(height: 4),
         RichText(
           text: TextSpan(
             style: TextStyle(color: Colors.grey.shade500, fontSize: 14),
             children: [
-              const TextSpan(text: 'We sent a 6-digit code to '),  // Updated text
+              const TextSpan(text: 'Code sent to '),
               TextSpan(
                 text: _emailCtrl.text.trim(),
                 style: const TextStyle(
@@ -356,32 +380,29 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
           ),
         ),
         const SizedBox(height: 30),
-        // OTP boxes centered - Updated for 6 digits
         Center(
           child: Pinput(
             controller: _otpCtrl,
-            length: 6,  // Changed from 4 to 6
+            length: 6,
             keyboardType: TextInputType.number,
             inputFormatters: [FilteringTextInputFormatter.digitsOnly],
             defaultPinTheme: PinTheme(
-              width: 52,  // Adjusted width for 6 digits
-              height: 64,
-              textStyle: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900,
+              width: 46, height: 52,
+              textStyle: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900,
                   color: Color(AppColors.textPrimary)),
               decoration: BoxDecoration(
                 color: const Color(AppColors.background),
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: Colors.grey.shade200, width: 1.5),
               ),
             ),
             focusedPinTheme: PinTheme(
-              width: 52,  // Adjusted width for 6 digits
-              height: 64,
-              textStyle: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900,
+              width: 46, height: 52,
+              textStyle: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900,
                   color: Color(AppColors.primary)),
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: const Color(AppColors.primary), width: 2.5),
                 boxShadow: [
                   BoxShadow(
@@ -392,13 +413,12 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
               ),
             ),
             submittedPinTheme: PinTheme(
-              width: 52,  // Adjusted width for 6 digits
-              height: 64,
-              textStyle: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900,
+              width: 46, height: 52,
+              textStyle: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900,
                   color: Color(AppColors.primary)),
               decoration: BoxDecoration(
                 color: const Color(AppColors.primary).withValues(alpha: 0.06),
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: const Color(AppColors.primary).withValues(alpha: 0.4), width: 1.5),
               ),
             ),
@@ -440,23 +460,28 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                 setState(() { _otpSent = false; _otpCtrl.clear(); });
                 _animateIn();
               },
-              icon: const Icon(Icons.arrow_back_rounded, size: 15),
+              icon: const Icon(Icons.arrow_back_rounded, size: 14),
               label: const Text('Change email'),
               style: TextButton.styleFrom(
                   foregroundColor: Colors.grey.shade500,
                   padding: EdgeInsets.zero),
             ),
             TextButton(
-              onPressed: _sending ? null : () async {
+              onPressed: _sending || _resendSeconds > 0 ? null : () async {
                 final auth = context.read<AuthProvider>();
                 await auth.resendOtp(_emailCtrl.text.trim());
-                if (mounted) AppToast.success(context, 'OTP resent!');
+                if (mounted) {
+                  AppToast.success(context, 'OTP resent!');
+                  _startResendTimer();
+                }
               },
               style: TextButton.styleFrom(
                   foregroundColor: const Color(AppColors.primary),
                   padding: EdgeInsets.zero),
-              child: const Text('Resend OTP',
-                  style: TextStyle(fontWeight: FontWeight.w700)),
+              child: Text(
+                _resendSeconds > 0 ? 'Resend in ${_resendSeconds}s' : 'Resend OTP',
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
             ),
           ],
         ),

@@ -27,8 +27,18 @@ class _HomeScreenState extends State<HomeScreen>
         CurvedAnimation(parent: _headerController, curve: Curves.easeOut);
     _headerController.forward();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<MenuProvider>().loadHomeData();
+      _loadData();
     });
+  }
+
+  Future<void> _loadData() async {
+    final menu = context.read<MenuProvider>();
+    final auth = context.read<AuthProvider>();
+
+    await Future.wait([
+      menu.loadHomeData(),
+      auth.refreshUser(),
+    ]);
   }
 
   @override
@@ -48,7 +58,7 @@ class _HomeScreenState extends State<HomeScreen>
       backgroundColor: const Color(AppColors.background),
       body: RefreshIndicator(
         color: const Color(AppColors.primary),
-        onRefresh: () => context.read<MenuProvider>().loadHomeData(),
+        onRefresh: _loadData,
         child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
@@ -158,25 +168,26 @@ class _HomeScreenState extends State<HomeScreen>
                                   padding: const EdgeInsets.symmetric(
                                       horizontal: 10, vertical: 7),
                                   decoration: BoxDecoration(
-                                    color: const Color(AppColors.coins)
-                                        .withValues(alpha: 0.22),
+                                    color:
+                                        const Color.fromARGB(255, 226, 226, 226)
+                                            .withValues(alpha: 0.22),
                                     borderRadius: BorderRadius.circular(20),
                                     border: Border.all(
-                                        color: const Color(AppColors.coins)
-                                            .withValues(alpha: 0.4)),
+                                        color:
+                                            const Color.fromARGB(255, 0, 0, 0)
+                                                .withValues(alpha: 0.4)),
                                   ),
                                   child: Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        const Icon(
-                                            Icons.monetization_on_rounded,
-                                            color: Color(AppColors.coins),
+                                        const Icon(Icons.stars_rounded,
+                                            color: Color.fromARGB(255, 0, 0, 0),
                                             size: 15),
                                         const SizedBox(width: 5),
                                         Text(
                                           '${auth.user?.coinBalance ?? 0} Coins',
                                           style: const TextStyle(
-                                            color: Colors.white,
+                                            color: Color.fromARGB(255, 0, 0, 0),
                                             fontWeight: FontWeight.w800,
                                             fontSize: 12,
                                           ),
@@ -196,7 +207,8 @@ class _HomeScreenState extends State<HomeScreen>
                                         width: 38,
                                         height: 38,
                                         decoration: BoxDecoration(
-                                          color: Colors.white.withValues(alpha: 0.18),
+                                          color: Colors.white
+                                              .withValues(alpha: 0.18),
                                           borderRadius:
                                               BorderRadius.circular(11),
                                         ),
@@ -433,14 +445,18 @@ class _CoinCard extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           gradient: const LinearGradient(
-            colors: [Color(0xFFFFB300), Color(0xFFFF8F00)],
+            colors: [
+              Color.fromARGB(255, 255, 255, 255),
+              Color.fromARGB(255, 255, 255, 255)
+            ],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFFFFB300).withValues(alpha: 0.35),
+              color: const Color.fromARGB(255, 255, 148, 109)
+                  .withValues(alpha: 0.35),
               blurRadius: 12,
               offset: const Offset(0, 5),
             ),
@@ -452,12 +468,13 @@ class _CoinCard extends StatelessWidget {
               width: 48,
               height: 48,
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.2),
+                color:
+                    const Color.fromARGB(255, 0, 0, 0).withValues(alpha: 0.2),
                 shape: BoxShape.circle,
               ),
               child: const Icon(
-                Icons.monetization_on_rounded,
-                color: Colors.white,
+                Icons.stars_rounded,
+                color: Color.fromARGB(255, 0, 0, 0),
                 size: 26,
               ),
             ),
@@ -469,7 +486,7 @@ class _CoinCard extends StatelessWidget {
                   Text(
                     '$coinBalance Coins',
                     style: const TextStyle(
-                      color: Colors.white,
+                      color: Color.fromARGB(255, 0, 0, 0),
                       fontWeight: FontWeight.w900,
                       fontSize: 20,
                     ),
@@ -479,7 +496,8 @@ class _CoinCard extends StatelessWidget {
                         ? 'Worth ₹$coinBalance  ·  Use at checkout'
                         : 'Earn 1 coin per ₹10 spent',
                     style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.85),
+                      color: const Color.fromARGB(255, 0, 0, 0)
+                          .withValues(alpha: 0.85),
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
                     ),
@@ -490,21 +508,22 @@ class _CoinCard extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.25),
+                color:
+                    const Color.fromARGB(255, 0, 0, 0).withValues(alpha: 0.25),
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Row(mainAxisSize: MainAxisSize.min, children: [
                 Text(
                   coinBalance > 0 ? 'View' : 'Earn',
                   style: const TextStyle(
-                    color: Colors.white,
+                    color: Color.fromARGB(255, 0, 0, 0),
                     fontWeight: FontWeight.w800,
                     fontSize: 12,
                   ),
                 ),
                 const SizedBox(width: 4),
                 const Icon(Icons.arrow_forward_ios_rounded,
-                    color: Colors.white, size: 11),
+                    color: Color.fromARGB(255, 0, 0, 0), size: 11),
               ]),
             ),
           ],
@@ -648,7 +667,8 @@ class _BannerCard extends StatelessWidget {
               width: 150,
               height: 150,
               decoration: BoxDecoration(
-                  shape: BoxShape.circle, color: Colors.white.withValues(alpha: 0.1)),
+                  shape: BoxShape.circle,
+                  color: Colors.white.withValues(alpha: 0.1)),
             ),
           ),
           Padding(
@@ -688,8 +708,8 @@ class _BannerCard extends StatelessWidget {
             right: 20,
             top: 0,
             bottom: 0,
-            child:
-                Icon(data.icon, color: Colors.white.withValues(alpha: 0.9), size: 72),
+            child: Icon(data.icon,
+                color: Colors.white.withValues(alpha: 0.9), size: 72),
           ),
         ],
       ),
@@ -705,16 +725,24 @@ class _CategoriesRow extends StatelessWidget {
 
   IconData _icon(String name) {
     final n = name.toLowerCase();
-    if (n.contains('pizza')) { return Icons.local_pizza_rounded; }
+    if (n.contains('pizza')) {
+      return Icons.local_pizza_rounded;
+    }
     if (n.contains('pasta') || n.contains('noodle')) {
       return Icons.ramen_dining_rounded;
     }
-    if (n.contains('burger')) { return Icons.lunch_dining_rounded; }
-    if (n.contains('dessert') || n.contains('sweet')) { return Icons.cake_rounded; }
+    if (n.contains('burger')) {
+      return Icons.lunch_dining_rounded;
+    }
+    if (n.contains('dessert') || n.contains('sweet')) {
+      return Icons.cake_rounded;
+    }
     if (n.contains('drink') || n.contains('bev')) {
       return Icons.local_drink_rounded;
     }
-    if (n.contains('salad')) { return Icons.eco_rounded; }
+    if (n.contains('salad')) {
+      return Icons.eco_rounded;
+    }
     if (n.contains('side') || n.contains('starter')) {
       return Icons.restaurant_rounded;
     }
@@ -745,7 +773,8 @@ class _CategoriesRow extends StatelessWidget {
                     borderRadius: BorderRadius.circular(16),
                     boxShadow: [
                       BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.07), blurRadius: 8)
+                          color: Colors.black.withValues(alpha: 0.07),
+                          blurRadius: 8)
                     ],
                   ),
                   child: c.imageUrl != null

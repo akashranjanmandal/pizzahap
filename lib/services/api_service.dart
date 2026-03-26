@@ -399,7 +399,7 @@ class ApiService {
 
   // ─── PAYMENTS ───────────────────────────────────────────────────────
 
-  static Future<Map<String, dynamic>> createPaymentOrder(int orderId, String paymentMethod) =>
+  static Future<dynamic> createPaymentOrder(int orderId, String paymentMethod) =>
       _safeRequest(() async {
     final response = await http.post(
       Uri.parse('${AppConfig.baseUrl}${AppStrings.createPayment}'),

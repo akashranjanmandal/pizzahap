@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/providers.dart';
@@ -34,8 +35,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
   /// Pull address + coin balance from the user profile (live from server)
   void _initFromUser() {
-    final user = context.read<AuthProvider>().user;
+    final auth = context.read<AuthProvider>();
+    final user = auth.user;
     if (user == null) return;
+
+    // Refresh user in background to get most updated coins
+    auth.refreshUser();
+
     // Pre-fill address from profile — only on first open
     if (!_addressInitialized) {
       _houseCtrl.text = user.addressHouse ?? '';
@@ -123,7 +129,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     };
 
     final result = await orderProvider.placeOrder(orderData);
-    
+
     if (result == null) {
       AppLoader.hide();
       setState(() => _placingOrder = false);
@@ -134,18 +140,75 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
     if (_paymentMethod == 'online') {
       try {
-        final payResult = await ApiService.createPaymentOrder(result['order_id'], 'payu');
-        final String? payUrl = payResult['payment_url'] ?? payResult['url'] ?? payResult['redirect_url'];
-        
+        final dynamic payResult =
+            await ApiService.createPaymentOrder(result['order_id'], 'payu');
+        debugPrint('[PAYMENT_DEBUG]: PayResult type: ${payResult.runtimeType}');
+        debugPrint('[PAYMENT_DEBUG]: result: $payResult');
+
+        String? payUrl;
+        if (payResult is String) {
+          payUrl = payResult;
+        } else if (payResult is Map) {
+          payUrl = payResult['payment_url'] ??
+              payResult['url'] ??
+              payResult['redirect_url'] ??
+              payResult['payment_link'] ??
+              payResult['paymentLink'] ??
+              payResult['checkout_url'] ??
+              payResult['checkoutUrl'] ??
+              payResult['pay_url'] ??
+              payResult['link'] ??
+              payResult['form_url'];
+
+          // Fallback for PayU raw parameters
+          if (payUrl == null && payResult.containsKey('payu_params')) {
+            debugPrint(
+                '[PAYMENT_DEBUG] payu_params detected. Constructing auto-submit form...');
+            final params = Map<String, dynamic>.from(payResult['payu_params']);
+
+            // Determine endpoint (test vs production)
+            final isTest = params['key'] == 'your_payu_key' ||
+                (params['key'] ?? '').toString().toLowerCase().contains('test');
+            final endpoint = isTest
+                ? 'https://test.payu.in/_payment'
+                : 'https://secure.payu.in/_payment';
+
+            // Build self-submitting HTML form
+            String formHtml =
+                '<html><body onload="document.f.submit();"><form id="f" name="f" method="post" action="$endpoint">';
+            params.forEach((k, v) => formHtml +=
+                '<input type="hidden" name="${k.toString()}" value="${v.toString()}">');
+            formHtml += '</form></body></html>';
+
+            // Encode as Data URI for url_launcher
+            payUrl =
+                'data:text/html;base64,${base64Encode(utf8.encode(formHtml))}';
+          }
+        }
+
         AppLoader.hide();
         setState(() => _placingOrder = false);
         if (!mounted) return;
 
         if (payUrl != null && payUrl.isNotEmpty) {
-          final Uri uri = Uri.parse(payUrl);
-          // Launch external browser for payment
-          await launchUrl(uri, mode: LaunchMode.externalApplication);
-          
+          try {
+            debugPrint('[PAYMENT_DEBUG] Launching Payment interface...');
+            final Uri uri = Uri.parse(payUrl);
+            final launched =
+                await launchUrl(uri, mode: LaunchMode.externalApplication);
+
+            if (launched) {
+              debugPrint('[PAYMENT_DEBUG] Launcher success!');
+            } else {
+              debugPrint('[PAYMENT_DEBUG] Launcher report FALSE');
+            }
+          } catch (e) {
+            debugPrint('[PAYMENT_DEBUG] launchUrl error: $e');
+            if (mounted) {
+              AppToast.error(context, 'Could not open browser for payment: $e');
+            }
+          }
+
           if (!mounted) return;
           // Redirect to order details instead of confirm screen, as payment is pending
           AppToast.success(context, 'Order placed! Please complete payment.');
@@ -159,8 +222,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           );
           return;
         } else {
-          AppToast.error(context, 'Payment gateway returned no URL. Please check My Orders.');
+          debugPrint('[PAYMENT_DEBUG] payUrl was null or empty');
         }
+        AppToast.error(context,
+            'Payment gateway returned no URL. Please check My Orders.');
       } catch (e) {
         AppLoader.hide();
         setState(() => _placingOrder = false);
@@ -454,7 +519,7 @@ class _CoinRedemptionCard extends StatelessWidget {
                   color: const Color(AppColors.coins).withValues(alpha: 0.12),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.monetization_on_rounded,
+                child: const Icon(Icons.stars_rounded,
                     color: Color(AppColors.coins), size: 20),
               ),
               const SizedBox(width: 12),
@@ -536,18 +601,6 @@ class _CoinRedemptionCard extends StatelessWidget {
               ]),
             ),
           ],
-
-          // Info row
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-            child: Row(children: [
-              const Icon(Icons.info_outline_rounded,
-                  size: 13, color: Colors.grey),
-              const SizedBox(width: 5),
-              Text('1 coin = ₹1  |  Earn 1 coin per ₹10 spent',
-                  style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
-            ]),
-          ),
         ],
       ),
     );

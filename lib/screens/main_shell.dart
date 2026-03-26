@@ -9,6 +9,8 @@ import 'menu/menu_screen.dart';
 import 'cart/cart_screen.dart';
 import 'orders/orders_screen.dart';
 import 'profile/profile_screen.dart';
+import '../widgets/feedback_dialog.dart';
+
 
 class MainShell extends StatefulWidget {
   final int initialTab;
@@ -32,14 +34,35 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
         (i) => AnimationController(
             vsync: this, duration: const Duration(milliseconds: 200)));
     _tabControllers[_currentIndex].forward();
-    // Load notifications on shell init, then poll every 2 minutes
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkAuth();
       context.read<NotificationProvider>().load();
+      _checkPendingReviews();
     });
+    
     _notifTimer = Timer.periodic(const Duration(minutes: 2), (_) {
       if (mounted) context.read<NotificationProvider>().load();
     });
   }
+
+  void _checkAuth() {
+    final auth = context.read<AuthProvider>();
+    if (!auth.isLoggedIn) {
+      Navigator.pushNamedAndRemoveUntil(context, '/login', (r) => false);
+    }
+  }
+
+  void _checkPendingReviews() async {
+    final orderProvider = context.read<OrderProvider>();
+    final order = await orderProvider.getLatestUnreviewedDeliveredOrder();
+    if (order != null && mounted) {
+      FeedbackDialog.show(context, order, onSuccess: () {
+        context.read<AuthProvider>().refreshUser();
+      });
+    }
+  }
+
 
   @override
   void dispose() {

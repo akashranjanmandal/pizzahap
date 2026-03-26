@@ -86,8 +86,21 @@ class _OrderConfirmScreenState extends State<OrderConfirmScreen>
   Widget build(BuildContext context) {
     return PopScope(
       canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        Navigator.pushNamedAndRemoveUntil(context, '/home', (r) => false);
+      },
       child: Scaffold(
         backgroundColor: const Color(AppColors.background),
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_rounded),
+            onPressed: () =>
+                Navigator.pushNamedAndRemoveUntil(context, '/home', (r) => false),
+          ),
+        ),
         body: SafeArea(
           child: Padding(
             padding: const EdgeInsets.all(24),
@@ -175,7 +188,7 @@ class _OrderConfirmScreenState extends State<OrderConfirmScreen>
                                 '₹${widget.total.toStringAsFixed(0)}'),
                             if (widget.coinsRedeemed > 0) ...[
                               Divider(color: Colors.grey.shade100, height: 20),
-                              _detailRow(Icons.monetization_on_rounded,
+                              _detailRow(Icons.stars_rounded,
                                   'Coins Redeemed', '${widget.coinsRedeemed}',
                                   valueColor: const Color(AppColors.coins)),
                             ],

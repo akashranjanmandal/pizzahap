@@ -82,7 +82,7 @@ class _CoinsScreenState extends State<CoinsScreen> {
                     boxShadow: [BoxShadow(color: const Color(AppColors.coins).withValues(alpha: 0.3), blurRadius: 16, offset: const Offset(0, 6))],
                   ),
                   child: Column(children: [
-                    const Icon(Icons.monetization_on_rounded, color: Color(AppColors.coins), size: 44),
+                    const Icon(Icons.stars_rounded, color: Colors.white, size: 44),
                     const SizedBox(height: 8),
                     Text('$balance', style: const TextStyle(fontSize: 48, fontWeight: FontWeight.w900, color: Colors.white)),
                     const Text('Coins', style: TextStyle(fontSize: 16, color: Colors.white70, fontWeight: FontWeight.w600)),
@@ -130,7 +130,7 @@ class _CoinsScreenState extends State<CoinsScreen> {
                       boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8)],
                     ),
                     child: Column(children: [
-                      const Icon(Icons.monetization_on_rounded, color: Color(AppColors.coins), size: 44),
+                      const Icon(Icons.stars_rounded, color: Color(AppColors.coins), size: 44),
                       const SizedBox(height: 12),
                       const Text('No transactions yet', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
                       const SizedBox(height: 4),

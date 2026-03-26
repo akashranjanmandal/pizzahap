@@ -235,14 +235,22 @@ class _OrderCard extends StatelessWidget {
                             color: Color(AppColors.primary))),
                     if (order.coinsEarned > 0)
                       Row(mainAxisSize: MainAxisSize.min, children: [
-                        const Icon(Icons.monetization_on_rounded,
-                            size: 12, color: Color(AppColors.coins)),
+                        Icon(Icons.stars_rounded,
+                            size: 11,
+                            color: order.isDelivered
+                                ? const Color(AppColors.coins)
+                                : Colors.grey.shade500),
                         const SizedBox(width: 2),
-                        Text('+${order.coinsEarned} coins',
-                            style: const TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                                color: Color(AppColors.coins))),
+                        Text(
+                            order.isDelivered
+                                ? '+${order.coinsEarned} coins'
+                                : '${order.coinsEarned} to earn', // Short text for small space
+                            style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                                color: order.isDelivered
+                                    ? const Color(AppColors.coins)
+                                    : Colors.grey.shade600)),
                       ]),
                   ]),
                 ],
